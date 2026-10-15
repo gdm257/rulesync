@@ -876,6 +876,7 @@ export class SkillsProcessor extends DirFeatureProcessor {
     global = false,
     getFactory = defaultGetFactory,
     dryRun = false,
+    allowSymlinkEscape = false,
     logger,
   }: {
     outputRoot?: string;
@@ -884,6 +885,7 @@ export class SkillsProcessor extends DirFeatureProcessor {
     global?: boolean;
     getFactory?: GetFactory;
     dryRun?: boolean;
+    allowSymlinkEscape?: boolean;
     logger: Logger;
   }) {
     super({
@@ -892,6 +894,7 @@ export class SkillsProcessor extends DirFeatureProcessor {
       dryRun,
       avoidBlockScalars: toolTarget === "cursor",
       logger,
+      allowSymlinkEscape,
     });
     const result = SkillsProcessorToolTargetSchema.safeParse(toolTarget);
     if (!result.success) {

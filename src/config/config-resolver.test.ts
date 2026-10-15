@@ -789,6 +789,71 @@ describe("config-resolver", () => {
       expect(config.getVerbose()).toBe(false);
     });
 
+    it("should resolve allowSymlinkEscape with CLI over local over base", async () => {
+      await writeFileContent(
+        join(testDir, "rulesync.jsonc"),
+        JSON.stringify({ targets: ["cursor"], global: true, allowSymlinkEscape: false }),
+      );
+      await writeFileContent(
+        join(testDir, "rulesync.local.jsonc"),
+        JSON.stringify({ allowSymlinkEscape: true }),
+      );
+
+      const fromLocal = await ConfigResolver.resolve({
+        configPath: join(testDir, "rulesync.jsonc"),
+      });
+      expect(fromLocal.getAllowSymlinkEscape()).toBe(true);
+
+      // An explicit `--allow-symlink-escape=false` has to beat the local file
+      // that turned the switch on.
+      const fromCli = await ConfigResolver.resolve({
+        configPath: join(testDir, "rulesync.jsonc"),
+        allowSymlinkEscape: false,
+      });
+      expect(fromCli.getAllowSymlinkEscape()).toBe(false);
+
+      const fromCliOn = await ConfigResolver.resolve({
+        configPath: join(testDir, "rulesync.jsonc"),
+        allowSymlinkEscape: true,
+      });
+      expect(fromCliOn.getAllowSymlinkEscape()).toBe(true);
+    });
+
+    it("should default allowSymlinkEscape to false", async () => {
+      await writeFileContent(
+        join(testDir, "rulesync.jsonc"),
+        JSON.stringify({ targets: ["cursor"], global: true }),
+      );
+
+      const config = await ConfigResolver.resolve({
+        configPath: join(testDir, "rulesync.jsonc"),
+      });
+
+      expect(config.getAllowSymlinkEscape()).toBe(false);
+    });
+
+    it("should ignore allowSymlinkEscape and warn once in a project-scoped run", async () => {
+      const logger = { warn: vi.fn(), configure: vi.fn() } as unknown as Logger;
+      await writeFileContent(
+        join(testDir, "rulesync.jsonc"),
+        JSON.stringify({ targets: ["cursor"], allowSymlinkEscape: true }),
+      );
+
+      const config = await ConfigResolver.resolve(
+        { configPath: join(testDir, "rulesync.jsonc") },
+        { logger },
+      );
+
+      // Project scope keeps its byte-identical output, so the switch never
+      // reaches the writers there.
+      expect(config.getGlobal()).toBe(false);
+      expect(config.getAllowSymlinkEscape()).toBe(false);
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Ignoring "allowSymlinkEscape"'),
+      );
+    });
+
     it("should work without rulesync.local.jsonc", async () => {
       const baseConfigContent = JSON.stringify({
         outputRoots: ["./"],

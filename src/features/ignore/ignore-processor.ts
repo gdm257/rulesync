@@ -146,6 +146,7 @@ export class IgnoreProcessor extends FeatureProcessor {
     getFactory = defaultGetFactory,
     global = false,
     dryRun = false,
+    allowSymlinkEscape = false,
     logger,
     featureOptions,
   }: {
@@ -155,10 +156,11 @@ export class IgnoreProcessor extends FeatureProcessor {
     getFactory?: GetFactory;
     global?: boolean;
     dryRun?: boolean;
+    allowSymlinkEscape?: boolean;
     logger: Logger;
     featureOptions?: FeatureOptions;
   }) {
-    super({ outputRoot, inputRoots, dryRun, logger });
+    super({ outputRoot, inputRoots, dryRun, logger, allowSymlinkEscape });
     const result = IgnoreProcessorToolTargetSchema.safeParse(toolTarget);
     if (!result.success) {
       throw new Error(

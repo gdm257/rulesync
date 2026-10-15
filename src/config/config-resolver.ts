@@ -20,7 +20,12 @@ import {
   resolvePath,
   validateOutputRoot,
 } from "../utils/file.js";
-import { fallbackLogger, type Logger, warnWithFallback } from "../utils/logger.js";
+import {
+  fallbackLogger,
+  type Logger,
+  warnOnceWithFallback,
+  warnWithFallback,
+} from "../utils/logger.js";
 import {
   assertInputRootFieldsExclusive,
   assertInputRootsNonEmpty,
@@ -64,6 +69,7 @@ const getDefaults = (): ConfigDefaults => ({
   outputRoots: [process.cwd()],
   configPath: RULESYNC_CONFIG_RELATIVE_FILE_PATH,
   global: false,
+  allowSymlinkEscape: false,
   silent: false,
   simulateCommands: false,
   simulateSubagents: false,
@@ -142,6 +148,7 @@ const mergeConfigs = (
     delete: localConfig.delete ?? baseConfig.delete,
     outputRoots: localConfig.outputRoots ?? baseConfig.outputRoots,
     global: localConfig.global ?? baseConfig.global,
+    allowSymlinkEscape: localConfig.allowSymlinkEscape ?? baseConfig.allowSymlinkEscape,
     silent: localConfig.silent ?? baseConfig.silent,
     simulateCommands: localConfig.simulateCommands ?? baseConfig.simulateCommands,
     simulateSubagents: localConfig.simulateSubagents ?? baseConfig.simulateSubagents,
@@ -429,6 +436,7 @@ export class ConfigResolver {
       outputRoots,
       configPath = getDefaults().configPath,
       global,
+      allowSymlinkEscape,
       silent,
       simulateCommands,
       simulateSubagents,
@@ -578,6 +586,23 @@ export class ConfigResolver {
       configByFile,
       validatedConfigPath,
     });
+    // The switch only exists for global runs: a project-scope run keeps its
+    // byte-identical output, so a project-scope `allowSymlinkEscape` is dropped
+    // with a one-line warning instead of silently changing what is written.
+    const requestedAllowSymlinkEscape = pick({
+      cli: allowSymlinkEscape,
+      file: configByFile.allowSymlinkEscape,
+      fallback: getDefaults().allowSymlinkEscape,
+    });
+    if (!resolvedGlobal && requestedAllowSymlinkEscape) {
+      warnOnceWithFallback(
+        logger,
+        `Ignoring "allowSymlinkEscape" because this run is project-scoped; ` +
+          `pass global=true (CLI: --global) to write through symbolic links that ` +
+          `resolve outside the output root.`,
+      );
+    }
+    const resolvedAllowSymlinkEscape = resolvedGlobal && requestedAllowSymlinkEscape;
 
     const { runFeatures, retireFeatures } = splitRetireFeatures({
       features,
@@ -604,6 +629,7 @@ export class ConfigResolver {
         global: resolvedGlobal,
       }),
       global: resolvedGlobal,
+      allowSymlinkEscape: resolvedAllowSymlinkEscape,
       silent: resolvedSilent,
       simulateCommands: pick({
         cli: simulateCommands,

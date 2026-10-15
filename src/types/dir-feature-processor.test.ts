@@ -1,4 +1,4 @@
-import { chmod, mkdir, symlink } from "node:fs/promises";
+import { chmod, mkdir, readFile, symlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -105,17 +105,19 @@ function createMockDirWithFiles({
   dirPath,
   mainFileBody,
   otherFiles = [],
+  outputRoot = dirname(dirPath),
 }: {
   dirPath: string;
   mainFileBody?: string;
   otherFiles?: AiDirFile[];
+  outputRoot?: string;
 }): AiDir {
   return {
     getDirPath: () => dirPath,
     // The same three values `createMockDir` supplies: the orphan sweep reads
     // them positionally, so a mock without them fails at run time rather than
     // in the type checker, which the cast below has already given up on.
-    getOutputRoot: () => dirname(dirPath),
+    getOutputRoot: () => outputRoot,
     getRelativeDirPath: () => ".",
     getDirName: () => basename(dirPath),
     getMainFile: () =>
@@ -1746,5 +1748,83 @@ describe("DirFeatureProcessor", () => {
       expect(ensureDir).not.toHaveBeenCalled();
       expect(writeFileContent).not.toHaveBeenCalled();
     });
+  });
+
+  describe("writeAiDirs with allowSymlinkEscape", () => {
+    let testDir: string;
+    let cleanup: () => Promise<void>;
+
+    beforeEach(async () => {
+      ({ testDir, cleanup } = await setupTestDirectory());
+      vi.spyOn(process, "cwd").mockReturnValue(testDir);
+      vi.mocked(readFileContentOrNull).mockResolvedValue(null);
+      // These two write for real: the point is where the bytes land, and a
+      // mocked writer cannot answer that.
+      const actual = await vi.importActual<typeof import("../utils/file.js")>("../utils/file.js");
+      vi.mocked(ensureDir).mockImplementation(actual.ensureDir);
+      vi.mocked(writeFileContent).mockImplementation(actual.writeFileContent);
+    });
+
+    afterEach(async () => {
+      await cleanup();
+    });
+
+    /**
+     * A pseudo-home whose tool directory is a link to a sibling tree, the
+     * layout a user checks in to keep one skill directory shared.
+     */
+    const setupLinkedHome = async (): Promise<{
+      home: string;
+      target: string;
+      dirPath: string;
+    }> => {
+      const home = join(testDir, "home");
+      const target = join(testDir, "shared-skills");
+      await mkdir(join(home, ".claude"), { recursive: true });
+      await mkdir(target, { recursive: true });
+      await symlink(target, join(home, ".claude", "skills"));
+      return { home, target, dirPath: join(home, ".claude", "skills", "demo") };
+    };
+
+    it.skipIf(process.platform === "win32")(
+      "should write into the linked tool directory when allowSymlinkEscape is on",
+      async () => {
+        const logger = createMockLogger();
+        const { home, target, dirPath } = await setupLinkedHome();
+        const processor = new TestDirProcessor({
+          logger,
+          outputRoot: home,
+          allowSymlinkEscape: true,
+        });
+
+        const result = await processor.writeAiDirs([
+          createMockDirWithFiles({ dirPath, mainFileBody: "body", outputRoot: home }),
+        ]);
+
+        expect(result).toEqual({ count: 1, paths: [join(dirPath, "SKILL.md")] });
+        expect(await readFile(join(target, "demo", "SKILL.md"), "utf8")).toContain("body");
+        expect(logger.warn).not.toHaveBeenCalled();
+      },
+    );
+
+    it.skipIf(process.platform === "win32")(
+      "should warn and skip the same layout when allowSymlinkEscape is off",
+      async () => {
+        const logger = createMockLogger();
+        const { home, target, dirPath } = await setupLinkedHome();
+        const processor = new TestDirProcessor({ logger, outputRoot: home });
+
+        const result = await processor.writeAiDirs([
+          createMockDirWithFiles({ dirPath, mainFileBody: "body", outputRoot: home }),
+        ]);
+
+        expect(result).toEqual({ count: 0, paths: [] });
+        await expect(readFile(join(target, "demo", "SKILL.md"), "utf8")).rejects.toThrow();
+        expect(logger.warn).toHaveBeenCalledWith(
+          `Refusing to write ${JSON.stringify(dirPath)}: it resolves outside ` +
+            `${JSON.stringify(home)} through a symbolic link`,
+        );
+      },
+    );
   });
 });

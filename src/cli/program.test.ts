@@ -58,5 +58,29 @@ describe("createProgram", () => {
 
       expect(generateCommandMock.mock.calls[0]?.[1]).toMatchObject({ configPath: undefined });
     });
+
+    it("should coerce --allow-symlink-escape=value to a boolean", async () => {
+      // A bare optional-value option arrives as `true`, but one spelled
+      // `=value` arrives as a string: a truthy "false" would turn the switch
+      // on and let a global run write through links it was told not to.
+      const forwarded = async (args: string[]): Promise<unknown> => {
+        await createProgram().parseAsync(args, { from: "user" });
+        const options = generateCommandMock.mock.calls[0]?.[1] as Record<string, unknown>;
+        generateCommandMock.mockReset();
+        generateCommandMock.mockResolvedValue(undefined);
+        return options?.allowSymlinkEscape;
+      };
+
+      expect(await forwarded(["generate", "--allow-symlink-escape=false"])).toBe(false);
+      expect(await forwarded(["generate", "--allow-symlink-escape=true"])).toBe(true);
+      expect(await forwarded(["generate", "--allow-symlink-escape"])).toBe(true);
+      expect(await forwarded(["generate"])).toBeUndefined();
+    });
+
+    it("should register --allow-symlink-escape on convert too", () => {
+      const convert = createProgram().commands.find((candidate) => candidate.name() === "convert");
+
+      expect(convert?.helpInformation()).toContain("--allow-symlink-escape");
+    });
   });
 });

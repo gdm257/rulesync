@@ -119,6 +119,9 @@ export const ConfigParamsSchema = z.object({
   delete: z.boolean(),
   // New non-experimental options
   global: optional(z.boolean()),
+  // Write through a symbolic link that resolves outside the output root
+  // (`--allow-symlink-escape`). Off by default.
+  allowSymlinkEscape: optional(z.boolean()),
   silent: optional(z.boolean()),
   simulateCommands: optional(z.boolean()),
   simulateSubagents: optional(z.boolean()),
@@ -445,6 +448,7 @@ export class Config {
   private readonly verbose: boolean;
   private readonly delete: boolean;
   private readonly global: boolean;
+  private readonly allowSymlinkEscape: boolean;
   private readonly silent: boolean;
   private readonly simulateCommands: boolean;
   private readonly simulateSubagents: boolean;
@@ -486,6 +490,7 @@ export class Config {
     verbose,
     delete: isDelete,
     global,
+    allowSymlinkEscape,
     silent,
     simulateCommands,
     simulateSubagents,
@@ -554,6 +559,7 @@ export class Config {
     this.delete = isDelete;
 
     this.global = global ?? false;
+    this.allowSymlinkEscape = allowSymlinkEscape ?? false;
     this.silent = silent ?? false;
     this.simulateCommands = simulateCommands ?? false;
     this.simulateSubagents = simulateSubagents ?? false;
@@ -983,6 +989,10 @@ export class Config {
 
   public getGlobal(): boolean {
     return this.global;
+  }
+
+  public getAllowSymlinkEscape(): boolean {
+    return this.allowSymlinkEscape;
   }
 
   public getSilent(): boolean {

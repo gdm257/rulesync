@@ -794,6 +794,7 @@ async function warnSkillSubagentNameCollisions(params: {
       inputRoots: config.getInputRoots(),
       toolTarget,
       global,
+      allowSymlinkEscape: config.getAllowSymlinkEscape(),
       logger,
     });
     const subagentNames = new Set(
@@ -810,6 +811,7 @@ async function warnSkillSubagentNameCollisions(params: {
       inputRoots: config.getInputRoots(),
       toolTarget,
       global,
+      allowSymlinkEscape: config.getAllowSymlinkEscape(),
       logger,
     });
     const skillNames = (await skillsProcessor.loadRulesyncDirs())
@@ -1260,6 +1262,7 @@ async function loadConfigFileSkills({
         toolTarget,
         global: config.getGlobal(),
         dryRun: true,
+        allowSymlinkEscape: config.getAllowSymlinkEscape(),
         logger,
       });
       for (const rulesyncDir of await processor.loadRulesyncDirs()) {
@@ -1324,6 +1327,7 @@ async function generateRulesCore(params: {
       featureOptions,
       delete: config.getDelete(),
       dryRun: config.isPreviewMode(),
+      allowSymlinkEscape: config.getAllowSymlinkEscape(),
       logger,
     });
 
@@ -1477,6 +1481,7 @@ async function generateIgnoreCore(params: {
           toolTarget,
           global,
           dryRun: config.isPreviewMode(),
+          allowSymlinkEscape: config.getAllowSymlinkEscape(),
           logger,
           featureOptions: config.getFeatureOptions(toolTarget, "ignore"),
         });
@@ -1546,6 +1551,7 @@ async function generateMcpCore(params: {
         toolTarget: toolTarget,
         global: config.getGlobal(),
         dryRun: config.isPreviewMode(),
+        allowSymlinkEscape: config.getAllowSymlinkEscape(),
         logger,
       });
 
@@ -1610,6 +1616,7 @@ async function generateCommandsCore(params: {
         global: config.getGlobal(),
         dryRun: config.isPreviewMode(),
         flattenedCommandNaming: config.getFlattenedCommandNaming(),
+        allowSymlinkEscape: config.getAllowSymlinkEscape(),
         logger,
       });
 
@@ -1674,6 +1681,7 @@ async function generateSubagentsCore(params: {
         toolTarget: toolTarget,
         global: config.getGlobal(),
         dryRun: config.isPreviewMode(),
+        allowSymlinkEscape: config.getAllowSymlinkEscape(),
         logger,
       });
 
@@ -1738,6 +1746,7 @@ async function generateSkillsCore(params: {
         toolTarget: toolTarget,
         global: config.getGlobal(),
         dryRun: config.isPreviewMode(),
+        allowSymlinkEscape: config.getAllowSymlinkEscape(),
         logger,
       });
 
@@ -1807,6 +1816,7 @@ async function generateHooksCore(params: {
         global: config.getGlobal(),
         dryRun: config.isPreviewMode(),
         preserveUnownedHooks: config.getPreserveUnownedHooks(),
+        allowSymlinkEscape: config.getAllowSymlinkEscape(),
         logger,
       });
 
@@ -1867,6 +1877,7 @@ async function generatePermissionsCore(params: {
           toolTarget,
           global: config.getGlobal(),
           dryRun: config.isPreviewMode(),
+          allowSymlinkEscape: config.getAllowSymlinkEscape(),
           logger,
         });
 
@@ -1936,6 +1947,7 @@ async function generateChecksCore(params: {
         toolTarget: toolTarget,
         global: config.getGlobal(),
         dryRun: config.isPreviewMode(),
+        allowSymlinkEscape: config.getAllowSymlinkEscape(),
         logger,
       });
 

@@ -1556,6 +1556,7 @@ export class RulesProcessor extends FeatureProcessor {
     featureOptions,
     delete: deleteOrphans = false,
     dryRun = false,
+    allowSymlinkEscape = false,
     logger,
   }: {
     outputRoot?: string;
@@ -1589,9 +1590,10 @@ export class RulesProcessor extends FeatureProcessor {
      */
     delete?: boolean;
     dryRun?: boolean;
+    allowSymlinkEscape?: boolean;
     logger: Logger;
   }) {
-    super({ outputRoot, inputRoots, dryRun, logger });
+    super({ outputRoot, inputRoots, dryRun, logger, allowSymlinkEscape });
     const result = RulesProcessorToolTargetSchema.safeParse(toolTarget);
     if (!result.success) {
       throw new Error(

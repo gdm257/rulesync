@@ -296,6 +296,35 @@ describe("FeatureProcessor", () => {
     );
 
     it.skipIf(process.platform === "win32")(
+      "should delete through a linked directory out of the output root when allowSymlinkEscape is on",
+      async () => {
+        const logger = createMockLogger();
+        const root = join(testDir, "root");
+        const outside = join(testDir, "outside");
+        await mkdir(root, { recursive: true });
+        await mkdir(outside, { recursive: true });
+        await symlink(outside, join(root, ".tool"));
+        const processor = new TestProcessor({
+          logger,
+          outputRoot: root,
+          allowSymlinkEscape: true,
+        });
+
+        const linkedPath = join(root, ".tool", "orphan.md");
+        const count = await processor.removeOrphanAiFiles(
+          [createMockFile(linkedPath, { outputRoot: root })],
+          [],
+        );
+
+        // The sweep is the other half of the switch: a run that wrote through
+        // the link has to be able to clean up through it too.
+        expect(count).toBe(1);
+        expect(removeFile).toHaveBeenCalledExactlyOnceWith(linkedPath);
+        expect(logger.warn).not.toHaveBeenCalled();
+      },
+    );
+
+    it.skipIf(process.platform === "win32")(
       "should refuse a linked directory out of the output root before the dry-run report",
       async () => {
         const logger = createMockLogger();
@@ -489,6 +518,95 @@ describe("FeatureProcessor", () => {
         // A dry run reports what a real run would do, and a real run skips it.
         expect(result).toEqual({ count: 0, paths: [] });
         expect(logger.info).not.toHaveBeenCalledWith(expect.stringContaining("[DRY RUN]"));
+        expect(logger.warn).toHaveBeenCalledWith(
+          expect.stringContaining("through a symbolic link"),
+        );
+      },
+    );
+
+    it.skipIf(process.platform === "win32")(
+      "should write through a link out of the output root when allowSymlinkEscape is on",
+      async () => {
+        vi.mocked(readFileContentOrNull).mockResolvedValue(null);
+        const logger = createMockLogger();
+        const root = join(testDir, "root");
+        const outside = join(testDir, "outside");
+        await mkdir(root, { recursive: true });
+        await mkdir(outside, { recursive: true });
+        await symlink(outside, join(root, ".tool"));
+        const processor = new TestProcessor({
+          logger,
+          outputRoot: root,
+          allowSymlinkEscape: true,
+        });
+
+        const linkedPath = join(root, ".tool", "rules.md");
+        const result = await processor.writeAiFiles([
+          createMockFile(linkedPath, { outputRoot: root }),
+        ]);
+
+        // The tool reads the link, so the write follows it into the directory
+        // it points at instead of being refused.
+        expect(result).toEqual({ count: 1, paths: [linkedPath] });
+        expect(writeFileContent).toHaveBeenCalledWith(linkedPath, "content\n");
+        expect(logger.warn).not.toHaveBeenCalled();
+        expect(logger.debug).toHaveBeenCalledWith(
+          expect.stringContaining("allowSymlinkEscape is on"),
+        );
+      },
+    );
+
+    it.skipIf(process.platform === "win32")(
+      "should still refuse a dangling link when allowSymlinkEscape is on",
+      async () => {
+        vi.mocked(readFileContentOrNull).mockResolvedValue(null);
+        const logger = createMockLogger();
+        const root = join(testDir, "root");
+        await mkdir(root, { recursive: true });
+        // The switch allows a link whose target is known; a target that does
+        // not exist cannot be judged, so the fail-safe refusal stands.
+        await symlink(join(testDir, "not-yet"), join(root, "AGENTS.md"));
+        const processor = new TestProcessor({
+          logger,
+          outputRoot: root,
+          allowSymlinkEscape: true,
+        });
+
+        const linkedPath = join(root, "AGENTS.md");
+        const result = await processor.writeAiFiles([
+          createMockFile(linkedPath, { outputRoot: root }),
+        ]);
+
+        expect(result).toEqual({ count: 0, paths: [] });
+        expect(writeFileContent).not.toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalledWith(
+          `Refusing to write ${JSON.stringify(linkedPath)}: it resolves outside ` +
+            `${JSON.stringify(root)} through a symbolic link`,
+        );
+      },
+    );
+
+    it.skipIf(process.platform === "win32")(
+      "should still refuse a link cycle when allowSymlinkEscape is on",
+      async () => {
+        vi.mocked(readFileContentOrNull).mockResolvedValue(null);
+        const logger = createMockLogger();
+        const root = join(testDir, "root");
+        await mkdir(root, { recursive: true });
+        await symlink(join(root, "b"), join(root, "a"));
+        await symlink(join(root, "a"), join(root, "b"));
+        const processor = new TestProcessor({
+          logger,
+          outputRoot: root,
+          allowSymlinkEscape: true,
+        });
+
+        const result = await processor.writeAiFiles([
+          createMockFile(join(root, "a", "rules.md"), { outputRoot: root }),
+        ]);
+
+        expect(result).toEqual({ count: 0, paths: [] });
+        expect(writeFileContent).not.toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith(
           expect.stringContaining("through a symbolic link"),
         );
