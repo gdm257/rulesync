@@ -1915,4 +1915,39 @@ describe("CommandsProcessor Goose slash-command retraction", () => {
       );
     },
   );
+
+  it.skipIf(process.platform === "win32")(
+    "should rewrite a config through a link when allowSymlinkEscape is on",
+    async () => {
+      const outsideConfigPath = join(testDir, "outside", "config.yaml");
+      await writeFileContent(
+        outsideConfigPath,
+        [
+          "slash_commands:",
+          "  - command: removed",
+          `    recipe_path: ${join(testDir, ".config", "goose", "recipes", "removed.yaml")}`,
+          "",
+        ].join("\n"),
+      );
+      const root = join(testDir, "root");
+      await ensureDir(join(root, ".config", "goose"));
+      await symlink(outsideConfigPath, join(root, ".config", "goose", "config.yaml"));
+      const gooseLogger = createMockLogger();
+      const processor = new CommandsProcessor({
+        outputRoot: root,
+        toolTarget: "goose",
+        global: true,
+        logger: gooseLogger,
+        allowSymlinkEscape: true,
+      });
+
+      await processor.removeOrphanAiFiles([], []);
+
+      const after = await readFileContent(outsideConfigPath);
+      expect(after).not.toContain("removed");
+      expect(gooseLogger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining("through a symbolic link"),
+      );
+    },
+  );
 });
