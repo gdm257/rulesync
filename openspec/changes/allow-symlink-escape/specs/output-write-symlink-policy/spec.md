@@ -82,12 +82,17 @@
 
 ### Requirement: 开关是许可不是触发器
 
-配置文件中的 `allowSymlinkEscape: true` SHALL NOT 自行启用 global scope；global scope 的启用规则（配置文件的 `global: true` 需 CLI 显式 `--global`）保持不变。
+配置文件中的 `allowSymlinkEscape: true` SHALL NOT 自行启用 global scope；global scope 的既有启用规则保持不变（配置文件的 `global: true` 在未配置 input root 时即自行生效，无需 CLI 显式 `--global`）。
 
-#### Scenario: 仅靠配置无法触发放行
+#### Scenario: 开关单独不改变 scope
 
-- **WHEN** 外来仓库的 committed 配置同时设置 `global: true` 与 `allowSymlinkEscape: true`，用户未传 `--global`
+- **WHEN** 配置文件仅设置 `allowSymlinkEscape: true` 而未设置 `global: true`，用户未传 `--global`
 - **THEN** 运行为 project scope，开关被警告并忽略
+
+#### Scenario: 仅靠配置触发放行
+
+- **WHEN** 配置文件同时设置 `global: true` 与 `allowSymlinkEscape: true`，用户未传 `--global` 且未配置 input root
+- **THEN** 运行按既有 global 启用规则为 global scope，开关生效
 
 ### Requirement: 环境变量覆盖 root 的判定基准
 
