@@ -6,13 +6,21 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] 伪 home（`HOME_DIR` / `setupTestDirectory` 约定）+ 工具路径外逃链接：开关开 → 文件写入链接落点
-- [ ] 开关经 processor 构造参数到达守卫：CLI → resolver → Config → processors 全链路有单测（rebase 后 WIP 缺的正是这一段）
-- [ ] 开关关 → 现状 warn + skip，警告文案不变
-- [ ] 非 global 运行下设置开关 → warn 一次后忽略，写入行为不变
-- [ ] 悬空链接与链接环：开关开仍按逃逸拒绝
-- [ ] 优先级 CLI > local > base 有 config-resolver 用例
-- [ ] JSON schema 再生成收录新键，无 CI drift
-- [ ] `file-formats.md` Symlinks 节、`cli-commands.md`、configuration 指南同步核心条目（项目模式立场不变）
+- [x] 伪 home（`HOME_DIR` / `setupTestDirectory` 约定）+ 工具路径外逃链接：开关开 → 文件写入链接落点
+- [x] 开关经 processor 构造参数到达守卫：CLI → resolver → Config → processors 全链路有单测（rebase 后 WIP 缺的正是这一段）
+- [x] 开关关 → 现状 warn + skip，警告文案不变
+- [x] 非 global 运行下设置开关 → warn 一次后忽略，写入行为不变
+- [x] 悬空链接与链接环：开关开仍按逃逸拒绝
+- [x] 优先级 CLI > local > base 有 config-resolver 用例
+- [x] JSON schema 再生成收录新键，无 CI drift
+- [x] `file-formats.md` Symlinks 节、`cli-commands.md`、configuration 指南同步核心条目（项目模式立场不变）
+
+## Answer
+
+集成分支 `feat/allow-symlink-escape`。判定复用 `writablePathEscapesRoot`，开关只改变「逃逸 → 拒绝」这一步；解析优先级 CLI > local > base（`src/config/config-resolver.ts`），非 global 运行 warn 一次后忽略。
+
+code review 修复：开关开启时悬空链接与链接环曾被一并放行——两者的逃逸判定同样为真，守卫无从区分。新增 `writePathResolves`（`src/utils/file.ts`），仅在链接链可解析时放行，并把落点写进 debug 日志；`assertSweepPathInsideRoot` 同步收口。用例见 `src/types/feature-processor.test.ts` 的 dangling 与 cycle 两例。
+
+JSON schema 由 config 的 zod schema 生成，已收录新键；`src/generated/docs-content.ts` 无 drift。
