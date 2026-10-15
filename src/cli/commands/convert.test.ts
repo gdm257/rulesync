@@ -27,6 +27,7 @@ describe("convertCommand", () => {
     getDryRun: ReturnType<typeof vi.fn>;
     isPreviewMode: ReturnType<typeof vi.fn>;
     getLanguage: ReturnType<typeof vi.fn>;
+    getAllowSymlinkEscape: ReturnType<typeof vi.fn>;
   };
   let mockLogger: ReturnType<typeof createMockLogger>;
 
@@ -41,6 +42,7 @@ describe("convertCommand", () => {
       getDryRun: vi.fn().mockReturnValue(false),
       isPreviewMode: vi.fn().mockReturnValue(false),
       getLanguage: vi.fn().mockReturnValue(undefined),
+      getAllowSymlinkEscape: vi.fn().mockReturnValue(false),
     };
 
     vi.mocked(ConfigResolver.resolve).mockResolvedValue(mockConfig as never);

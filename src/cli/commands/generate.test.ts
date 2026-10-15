@@ -71,6 +71,7 @@ describe("generateCommand", () => {
       getLanguage: vi.fn().mockReturnValue(undefined),
       getDeriveSubprojectPathFromGlobs: vi.fn().mockReturnValue(false),
       getFlattenedCommandNaming: vi.fn().mockReturnValue("basename"),
+      getAllowSymlinkEscape: vi.fn().mockReturnValue(false),
       getDryRun: vi.fn().mockReturnValue(false),
       getCheck: vi.fn().mockReturnValue(false),
       isPreviewMode: vi.fn().mockReturnValue(false),

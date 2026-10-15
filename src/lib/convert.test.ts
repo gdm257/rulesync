@@ -50,6 +50,7 @@ describe("convertFromTool", () => {
     isPreviewMode: ReturnType<typeof vi.fn>;
     getFlattenedCommandNaming: ReturnType<typeof vi.fn>;
     getLanguage: ReturnType<typeof vi.fn>;
+    getAllowSymlinkEscape: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -64,6 +65,7 @@ describe("convertFromTool", () => {
       isPreviewMode: vi.fn().mockReturnValue(false),
       getFlattenedCommandNaming: vi.fn().mockReturnValue("basename"),
       getLanguage: vi.fn().mockReturnValue(undefined),
+      getAllowSymlinkEscape: vi.fn().mockReturnValue(false),
     };
 
     vi.mocked(RulesProcessor.getToolTargets).mockReturnValue(["cursor", "claudecode", "copilot"]);

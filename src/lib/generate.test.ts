@@ -277,6 +277,7 @@ describe("generate", () => {
     getDeriveSubprojectPathFromGlobs: ReturnType<typeof vi.fn>;
     isPreviewMode: ReturnType<typeof vi.fn>;
     getInputRoots: ReturnType<typeof vi.fn>;
+    getAllowSymlinkEscape: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -307,6 +308,7 @@ describe("generate", () => {
       getDeriveSubprojectPathFromGlobs: vi.fn().mockReturnValue(false),
       isPreviewMode: vi.fn().mockReturnValue(false),
       getInputRoots: vi.fn().mockReturnValue([process.cwd()]),
+      getAllowSymlinkEscape: vi.fn().mockReturnValue(false),
     };
 
     vi.mocked(intersection).mockImplementation((a, b) => a.filter((item) => b.includes(item)));

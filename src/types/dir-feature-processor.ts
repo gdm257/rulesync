@@ -23,6 +23,7 @@ import {
   toPosixPath,
   writeFileBuffer,
   writeFileContent,
+  writeLandingPath,
 } from "../utils/file.js";
 import { stringifyFrontmatter } from "../utils/frontmatter.js";
 import { type Logger, warnOnceWithFallback } from "../utils/logger.js";
@@ -195,6 +196,12 @@ export abstract class DirFeatureProcessor extends RulesyncSourceConsumer {
     );
   }
 
+  /** A dry-run preview names a write through an escaping link by its landing. */
+  private async dryRunLanding(targetPath: string): Promise<string> {
+    if (!this.allowSymlinkEscape) return targetPath;
+    return (await writeLandingPath(targetPath)) ?? targetPath;
+  }
+
   /**
    * Once converted to rulesync/tool dirs, write them to the filesystem.
    * Returns the number of directories written.
@@ -293,16 +300,22 @@ export abstract class DirFeatureProcessor extends RulesyncSourceConsumer {
 
       const relativeDir = aiDir.getRelativePathFromCwd();
       if (this.dryRun) {
-        this.logger.info(`[DRY RUN] Would create directory: ${stripControlCharacters(dirPath)}`);
+        this.logger.info(
+          `[DRY RUN] Would create directory: ${stripControlCharacters(await this.dryRunLanding(dirPath))}`,
+        );
         if (mainFile) {
           this.logger.info(
-            `[DRY RUN] Would write: ${stripControlCharacters(join(dirPath, mainFile.name))}`,
+            `[DRY RUN] Would write: ${stripControlCharacters(
+              await this.dryRunLanding(join(dirPath, mainFile.name)),
+            )}`,
           );
           changedPaths.push(join(relativeDir, mainFile.name));
         }
         for (const file of otherFiles) {
           this.logger.info(
-            `[DRY RUN] Would write: ${stripControlCharacters(join(dirPath, file.relativeFilePathToDirPath))}`,
+            `[DRY RUN] Would write: ${stripControlCharacters(
+              await this.dryRunLanding(join(dirPath, file.relativeFilePathToDirPath)),
+            )}`,
           );
           changedPaths.push(join(relativeDir, file.relativeFilePathToDirPath));
         }

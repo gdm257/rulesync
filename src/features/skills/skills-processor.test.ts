@@ -2465,7 +2465,6 @@ Test skill content`;
         expect(dirsToDelete.map((dir) => dir.getDirName())).toEqual(["stale"]);
         expect(logger.warn).not.toHaveBeenCalled();
       },
-      },
     );
 
     it("should not sweep a committed project skills root (gitlabduo)", async () => {

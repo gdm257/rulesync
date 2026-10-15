@@ -15,6 +15,7 @@ import {
   removeFile,
   writablePathEscapesRoot,
   writeFileContent,
+  writeLandingPath,
 } from "../utils/file.js";
 import type { Logger } from "../utils/logger.js";
 import type { WriteResult } from "../utils/result.js";
@@ -170,7 +171,11 @@ export abstract class FeatureProcessor extends RulesyncSourceConsumer {
       }
 
       if (this.dryRun) {
-        this.logger.info(`[DRY RUN] Would write: ${stripControlCharacters(filePath)}`);
+        // With the switch on, the write lands through the link: name the landing.
+        const landing = this.allowSymlinkEscape
+          ? ((await writeLandingPath(filePath)) ?? filePath)
+          : filePath;
+        this.logger.info(`[DRY RUN] Would write: ${stripControlCharacters(landing)}`);
       } else {
         await writeFileContent(filePath, contentWithNewline);
         if (fileMode !== undefined) {
