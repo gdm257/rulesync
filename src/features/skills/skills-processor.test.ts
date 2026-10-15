@@ -2383,7 +2383,7 @@ Test skill content`;
         expect(await fileExists(join(landingDir, "SKILL.md"))).toBe(true);
 
         const dirsToDelete = await processor.loadToolDirsToDelete();
-        expect(dirsToDelete.map((d) => d.getDirName()).sort()).toEqual([
+        expect(dirsToDelete.map((d) => d.getDirName()).toSorted()).toEqual([
           "live-skill",
           "stale-skill",
         ]);

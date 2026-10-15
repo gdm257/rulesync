@@ -1775,12 +1775,12 @@ describe("DirFeatureProcessor", () => {
   });
 
   describe("writeAiDirs with allowSymlinkEscape", () => {
-    let testDir: string;
-    let cleanup: () => Promise<void>;
+    let escapeTestDir: string;
+    let escapeCleanup: () => Promise<void>;
 
     beforeEach(async () => {
-      ({ testDir, cleanup } = await setupTestDirectory());
-      vi.spyOn(process, "cwd").mockReturnValue(testDir);
+      ({ testDir: escapeTestDir, cleanup: escapeCleanup } = await setupTestDirectory());
+      vi.spyOn(process, "cwd").mockReturnValue(escapeTestDir);
       vi.mocked(readFileContentOrNull).mockResolvedValue(null);
       // These two write for real: the point is where the bytes land, and a
       // mocked writer cannot answer that.
@@ -1790,7 +1790,7 @@ describe("DirFeatureProcessor", () => {
     });
 
     afterEach(async () => {
-      await cleanup();
+      await escapeCleanup();
     });
 
     /**
@@ -1802,8 +1802,8 @@ describe("DirFeatureProcessor", () => {
       target: string;
       dirPath: string;
     }> => {
-      const home = join(testDir, "home");
-      const target = join(testDir, "shared-skills");
+      const home = join(escapeTestDir, "home");
+      const target = join(escapeTestDir, "shared-skills");
       await mkdir(join(home, ".claude"), { recursive: true });
       await mkdir(target, { recursive: true });
       await symlink(target, join(home, ".claude", "skills"));

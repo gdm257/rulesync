@@ -251,6 +251,11 @@ export type RequiredConfigParams = Omit<InferredRequiredConfigParams, "targets" 
   features?: RulesyncFeatures;
 };
 
+/** Resolve an optional param to its default when the caller left it undefined. */
+function withDefault<T>(value: T | undefined, fallback: T): T {
+  return value ?? fallback;
+}
+
 /**
  * Normalizes the configuration file location to an absolute path.
  *
@@ -531,8 +536,8 @@ export class Config {
     // programmatic callers that construct `Config` directly; callers wanting
     // the warning should go through `ConfigResolver.resolve`.
 
-    const resolvedTargets: RulesyncConfigTargets = targets ?? [];
-    const resolvedFeatures: RulesyncFeatures = features ?? [];
+    const resolvedTargets: RulesyncConfigTargets = withDefault(targets, []);
+    const resolvedFeatures: RulesyncFeatures = withDefault(features, []);
 
     // Reject unknown keys in the object form of `targets`. Array-form values
     // are already validated at the Zod schema level.
@@ -558,21 +563,21 @@ export class Config {
     this.verbose = verbose;
     this.delete = isDelete;
 
-    this.global = global ?? false;
-    this.allowSymlinkEscape = allowSymlinkEscape ?? false;
-    this.silent = silent ?? false;
-    this.simulateCommands = simulateCommands ?? false;
-    this.simulateSubagents = simulateSubagents ?? false;
-    this.simulateSkills = simulateSkills ?? false;
-    this.preserveUnownedHooks = preserveUnownedHooks ?? false;
-    this.deriveSubprojectPathFromGlobs = deriveSubprojectPathFromGlobs ?? false;
-    this.flattenedCommandNaming = flattenedCommandNaming ?? "basename";
+    this.global = withDefault(global, false);
+    this.allowSymlinkEscape = withDefault(allowSymlinkEscape, false);
+    this.silent = withDefault(silent, false);
+    this.simulateCommands = withDefault(simulateCommands, false);
+    this.simulateSubagents = withDefault(simulateSubagents, false);
+    this.simulateSkills = withDefault(simulateSkills, false);
+    this.preserveUnownedHooks = withDefault(preserveUnownedHooks, false);
+    this.deriveSubprojectPathFromGlobs = withDefault(deriveSubprojectPathFromGlobs, false);
+    this.flattenedCommandNaming = withDefault(flattenedCommandNaming, "basename");
     this.language = language;
-    this.gitignoreTargetsOnly = gitignoreTargetsOnly ?? true;
-    this.gitignoreDestination = gitignoreDestination ?? "gitignore";
-    this.dryRun = dryRun ?? false;
-    this.check = check ?? false;
-    this.retireTargets = [...new Set(retireTargets ?? [])];
+    this.gitignoreTargetsOnly = withDefault(gitignoreTargetsOnly, true);
+    this.gitignoreDestination = withDefault(gitignoreDestination, "gitignore");
+    this.dryRun = withDefault(dryRun, false);
+    this.check = withDefault(check, false);
+    this.retireTargets = [...new Set(withDefault(retireTargets, []))];
     this.retireFeatures = retireFeatures;
     this.validateRetireTargets({ configFileTargets });
     // Capture the input roots once at construction time so subsequent
@@ -596,7 +601,7 @@ export class Config {
       anchorDir: dirname(this.inputRoots[0]),
     });
 
-    this.sources = sources ?? [];
+    this.sources = withDefault(sources, []);
   }
 
   /**

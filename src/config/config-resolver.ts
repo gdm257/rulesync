@@ -135,6 +135,15 @@ export function mergeInputRootConfigs({
   };
 }
 
+/** Local config wins; an explicitly undefined local value falls back to base. */
+function mergeConfigValue<K extends keyof PartialConfigParams>(
+  key: K,
+  localConfig: PartialConfigParams,
+  baseConfig: PartialConfigParams,
+): PartialConfigParams[K] {
+  return localConfig[key] ?? baseConfig[key];
+}
+
 const mergeConfigs = (
   baseConfig: PartialConfigParams,
   localConfig: PartialConfigParams,
@@ -142,28 +151,31 @@ const mergeConfigs = (
   // Local config takes precedence over base config
   // Only override if the value is explicitly set (not undefined)
   return {
-    targets: localConfig.targets ?? baseConfig.targets,
-    features: localConfig.features ?? baseConfig.features,
-    verbose: localConfig.verbose ?? baseConfig.verbose,
-    delete: localConfig.delete ?? baseConfig.delete,
-    outputRoots: localConfig.outputRoots ?? baseConfig.outputRoots,
-    global: localConfig.global ?? baseConfig.global,
-    allowSymlinkEscape: localConfig.allowSymlinkEscape ?? baseConfig.allowSymlinkEscape,
-    silent: localConfig.silent ?? baseConfig.silent,
-    simulateCommands: localConfig.simulateCommands ?? baseConfig.simulateCommands,
-    simulateSubagents: localConfig.simulateSubagents ?? baseConfig.simulateSubagents,
-    simulateSkills: localConfig.simulateSkills ?? baseConfig.simulateSkills,
-    preserveUnownedHooks: localConfig.preserveUnownedHooks ?? baseConfig.preserveUnownedHooks,
-    deriveSubprojectPathFromGlobs:
-      localConfig.deriveSubprojectPathFromGlobs ?? baseConfig.deriveSubprojectPathFromGlobs,
-    flattenedCommandNaming: localConfig.flattenedCommandNaming ?? baseConfig.flattenedCommandNaming,
-    language: localConfig.language ?? baseConfig.language,
-    gitignoreTargetsOnly: localConfig.gitignoreTargetsOnly ?? baseConfig.gitignoreTargetsOnly,
-    gitignoreDestination: localConfig.gitignoreDestination ?? baseConfig.gitignoreDestination,
-    dryRun: localConfig.dryRun ?? baseConfig.dryRun,
-    check: localConfig.check ?? baseConfig.check,
+    targets: mergeConfigValue("targets", localConfig, baseConfig),
+    features: mergeConfigValue("features", localConfig, baseConfig),
+    verbose: mergeConfigValue("verbose", localConfig, baseConfig),
+    delete: mergeConfigValue("delete", localConfig, baseConfig),
+    outputRoots: mergeConfigValue("outputRoots", localConfig, baseConfig),
+    global: mergeConfigValue("global", localConfig, baseConfig),
+    allowSymlinkEscape: mergeConfigValue("allowSymlinkEscape", localConfig, baseConfig),
+    silent: mergeConfigValue("silent", localConfig, baseConfig),
+    simulateCommands: mergeConfigValue("simulateCommands", localConfig, baseConfig),
+    simulateSubagents: mergeConfigValue("simulateSubagents", localConfig, baseConfig),
+    simulateSkills: mergeConfigValue("simulateSkills", localConfig, baseConfig),
+    preserveUnownedHooks: mergeConfigValue("preserveUnownedHooks", localConfig, baseConfig),
+    deriveSubprojectPathFromGlobs: mergeConfigValue(
+      "deriveSubprojectPathFromGlobs",
+      localConfig,
+      baseConfig,
+    ),
+    flattenedCommandNaming: mergeConfigValue("flattenedCommandNaming", localConfig, baseConfig),
+    language: mergeConfigValue("language", localConfig, baseConfig),
+    gitignoreTargetsOnly: mergeConfigValue("gitignoreTargetsOnly", localConfig, baseConfig),
+    gitignoreDestination: mergeConfigValue("gitignoreDestination", localConfig, baseConfig),
+    dryRun: mergeConfigValue("dryRun", localConfig, baseConfig),
+    check: mergeConfigValue("check", localConfig, baseConfig),
     ...mergeInputRootConfigs({ baseConfig, localConfig }),
-    sources: localConfig.sources ?? baseConfig.sources,
+    sources: mergeConfigValue("sources", localConfig, baseConfig),
   };
 };
 
@@ -242,6 +254,31 @@ function resolveGlobal({
   }
   const configGlobal = resolvedInputRoot !== undefined ? false : configByFile.global;
   return pick({ cli: global, file: configGlobal, fallback: getDefaults().global });
+}
+
+/**
+ * The switch only exists for global runs: a project-scope run keeps its
+ * byte-identical output, so a project-scope `allowSymlinkEscape` is dropped
+ * with a one-line warning instead of silently changing what is written.
+ */
+function resolveAllowSymlinkEscape({
+  logger,
+  resolvedGlobal,
+  requested,
+}: {
+  logger: Logger | undefined;
+  resolvedGlobal: boolean;
+  requested: boolean;
+}): boolean {
+  if (!resolvedGlobal && requested) {
+    warnOnceWithFallback(
+      logger,
+      `Ignoring "allowSymlinkEscape" because this run is project-scoped; ` +
+        `pass global=true (CLI: --global) to write through symbolic links that ` +
+        `resolve outside the output root.`,
+    );
+  }
+  return resolvedGlobal && requested;
 }
 
 /**
@@ -586,23 +623,16 @@ export class ConfigResolver {
       configByFile,
       validatedConfigPath,
     });
-    // The switch only exists for global runs: a project-scope run keeps its
-    // byte-identical output, so a project-scope `allowSymlinkEscape` is dropped
-    // with a one-line warning instead of silently changing what is written.
     const requestedAllowSymlinkEscape = pick({
       cli: allowSymlinkEscape,
       file: configByFile.allowSymlinkEscape,
       fallback: getDefaults().allowSymlinkEscape,
     });
-    if (!resolvedGlobal && requestedAllowSymlinkEscape) {
-      warnOnceWithFallback(
-        logger,
-        `Ignoring "allowSymlinkEscape" because this run is project-scoped; ` +
-          `pass global=true (CLI: --global) to write through symbolic links that ` +
-          `resolve outside the output root.`,
-      );
-    }
-    const resolvedAllowSymlinkEscape = resolvedGlobal && requestedAllowSymlinkEscape;
+    const resolvedAllowSymlinkEscape = resolveAllowSymlinkEscape({
+      logger,
+      resolvedGlobal,
+      requested: requestedAllowSymlinkEscape,
+    });
 
     const { runFeatures, retireFeatures } = splitRetireFeatures({
       features,
