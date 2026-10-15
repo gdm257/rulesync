@@ -20,7 +20,7 @@ import type { ToolTarget } from "../../types/tool-targets.js";
 import { quoteForLog, stripControlCharacters } from "../../utils/control-characters.js";
 import { formatError } from "../../utils/error.js";
 import {
-  assertWritablePathInsideRoot,
+  assertSweepPathInsideRoot,
   directoryExists,
   directoryExistsStrict,
   findFilesByGlobs,
@@ -1315,9 +1315,10 @@ export class SubagentsProcessor extends FeatureProcessor {
         // writes already went through it, so the run warns and carries on
         // rather than failing after its output landed.
         try {
-          await assertWritablePathInsideRoot({
+          await assertSweepPathInsideRoot({
             rootPath: rootOutputRoot,
             targetPath: baseDir,
+            allowSymlinkEscape: this.allowSymlinkEscape,
           });
         } catch (error) {
           this.logger.warn(
@@ -1393,9 +1394,10 @@ export class SubagentsProcessor extends FeatureProcessor {
       if (forDeletion) {
         await Promise.all(
           parseableFilePaths.map((path) =>
-            assertWritablePathInsideRoot({
+            assertSweepPathInsideRoot({
               rootPath: baseDir,
               targetPath: path,
+              allowSymlinkEscape: this.allowSymlinkEscape,
             }),
           ),
         );

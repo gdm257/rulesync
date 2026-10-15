@@ -422,5 +422,48 @@ describe("createOrphanSweepPlan", () => {
           `(a link cycle or an unreadable directory)`,
       );
     });
+
+    it("should still keep a candidate whose links form a cycle when escape is allowed", async () => {
+      // Escape is permission to follow a link, not to guess where an
+      // unfollowable one points.
+      const first = join(testDir, "first");
+      const second = join(testDir, "second");
+      await symlink(second, first);
+      await symlink(first, second);
+      const logger = createMockLogger();
+      const plan = createOrphanSweepPlan({ logger, allowSymlinkEscape: true });
+      const candidate = join(first, "stale.md");
+
+      expect(await plan.rejectClaimed({ items: [candidate], getPath: (path) => path })).toEqual([]);
+      expect(await plan.isGeneratedExactly({ path: candidate })).toBe(true);
+      expect(logger.warn).toHaveBeenCalledExactlyOnceWith(
+        `Refusing to sweep ${JSON.stringify(candidate)}: its symbolic links cannot be followed ` +
+          `(a link cycle or an unreadable directory)`,
+      );
+    });
+  });
+
+  describe("allowSymlinkEscape", () => {
+    it("should note that the sweeps follow symbolic links when the run allows it", async () => {
+      const logger = createMockLogger();
+      const plan = createOrphanSweepPlan({ logger, allowSymlinkEscape: true });
+      plan.defer({ sweep: async () => false });
+
+      await plan.run();
+
+      expect(logger.debug).toHaveBeenCalledWith(
+        "Sweeping through symbolic links outside the output root: allowSymlinkEscape is on",
+      );
+    });
+
+    it("should say nothing about symbolic links by default", async () => {
+      const logger = createMockLogger();
+      const plan = createOrphanSweepPlan({ logger });
+      plan.defer({ sweep: async () => false });
+
+      await plan.run();
+
+      expect(logger.debug).not.toHaveBeenCalled();
+    });
   });
 });

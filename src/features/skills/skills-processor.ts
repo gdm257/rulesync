@@ -22,7 +22,7 @@ import { ToolTarget } from "../../types/tool-targets.js";
 import { quoteForLog, stripControlCharacters } from "../../utils/control-characters.js";
 import { formatError } from "../../utils/error.js";
 import {
-  assertWritablePathInsideRoot,
+  assertSweepPathInsideRoot,
   directoryExists,
   directoryExistsStrict,
   listFileNames,
@@ -1409,9 +1409,10 @@ export class SkillsProcessor extends DirFeatureProcessor {
         continue;
       }
       try {
-        await assertWritablePathInsideRoot({
+        await assertSweepPathInsideRoot({
           rootPath: this.outputRoot,
           targetPath: skillsDirPath,
+          allowSymlinkEscape: this.allowSymlinkEscape,
         });
       } catch (error) {
         this.logger.warn(
@@ -1446,9 +1447,10 @@ export class SkillsProcessor extends DirFeatureProcessor {
         kind: "directory",
       });
       for (const dirName of dirNames) {
-        await assertWritablePathInsideRoot({
+        await assertSweepPathInsideRoot({
           rootPath: skillsDirPath,
           targetPath: join(skillsDirPath, dirName),
+          allowSymlinkEscape: this.allowSymlinkEscape,
         });
         if (
           !(await this.isOwnedSkillDir({
@@ -1524,9 +1526,10 @@ export class SkillsProcessor extends DirFeatureProcessor {
       });
       for (const fileName of fileNames) {
         const filePath = join(skillsDirPath, fileName);
-        await assertWritablePathInsideRoot({
+        await assertSweepPathInsideRoot({
           rootPath: skillsDirPath,
           targetPath: filePath,
+          allowSymlinkEscape: this.allowSymlinkEscape,
         });
         // The stem is the skill's name for a tool that writes `<name>.md`,
         // which is why the enumeration above is limited to `.md` in the first

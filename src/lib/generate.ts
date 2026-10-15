@@ -931,7 +931,10 @@ export async function generate(params: {
   // One plan for the whole run: every step registers what it writes into it, and
   // every `--delete` sweep is held back until the last step has written, so no
   // target sweeps a directory it shares with a target that has not run yet.
-  const sweepPlan = createOrphanSweepPlan({ logger });
+  const sweepPlan = createOrphanSweepPlan({
+    logger,
+    allowSymlinkEscape: config.getAllowSymlinkEscape(),
+  });
 
   const runners: Record<GenerationStepId, () => Promise<FeatureGenerateResult>> = {
     ignore: () => generateIgnoreCore({ config, logger, sweepPlan: sweepPlan.forFeature("ignore") }),

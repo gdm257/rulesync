@@ -136,7 +136,13 @@ type DeferredSweep = {
   feature?: string;
 };
 
-export function createOrphanSweepPlan({ logger }: { logger?: Logger } = {}): OrphanSweepPlan {
+export function createOrphanSweepPlan({
+  logger,
+  allowSymlinkEscape = false,
+}: {
+  logger?: Logger;
+  allowSymlinkEscape?: boolean;
+} = {}): OrphanSweepPlan {
   const generatedPaths = new Set<string>();
   const generatedTrees = new Set<string>();
   const deferredSweeps: DeferredSweep[] = [];
@@ -260,6 +266,11 @@ export function createOrphanSweepPlan({ logger }: { logger?: Logger } = {}): Orp
       deferredSweeps.push({ sweep, reportDeleted });
     },
     async run() {
+      if (allowSymlinkEscape && deferredSweeps.length > 0) {
+        logger?.debug(
+          "Sweeping through symbolic links outside the output root: allowSymlinkEscape is on",
+        );
+      }
       let hasDiff = false;
       for (const { sweep, reportDeleted, feature } of deferredSweeps) {
         if (await sweep()) hasDiff = true;

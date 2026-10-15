@@ -74,6 +74,21 @@ export async function assertWritablePathInsideRoot(params: {
   }
 }
 
+/**
+ * The orphan sweep's counterpart to {@link assertWritablePathInsideRoot}: the
+ * same assertion, skipped for a run that allows symbolic-link escape so the
+ * sweep reaches the landing the write path already wrote through.
+ */
+export async function assertSweepPathInsideRoot(params: {
+  rootPath: string;
+  targetPath: string;
+  allowSymlinkEscape?: boolean;
+}): Promise<void> {
+  const { rootPath, targetPath, allowSymlinkEscape = false } = params;
+  if (allowSymlinkEscape) return;
+  await assertWritablePathInsideRoot({ rootPath, targetPath });
+}
+
 export async function assertTreeContainsNoSymlinks(dirPath: string): Promise<void> {
   for (const entry of await readdir(dirPath, { withFileTypes: true })) {
     const entryPath = join(dirPath, entry.name);
