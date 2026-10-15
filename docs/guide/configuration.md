@@ -46,6 +46,14 @@ Example:
 
   // Advanced options
   "global": false, // Generate for global(user scope) configuration files
+
+  // Follow a symbolic link at an output path even when it resolves outside the
+  // output root, writing the generated files at the link's target. Global scope
+  // only: in project scope the key is ignored with a warning. Off by default,
+  // because a checked-out repository can carry such a link. See "Symlink Escape"
+  // below, and the "Symlinks" section of the File Formats reference.
+  "allowSymlinkEscape": false,
+
   "simulateCommands": false, // Generate simulated commands
   "simulateSubagents": false, // Generate simulated subagents
   "simulateSkills": false, // Generate simulated skills
@@ -284,6 +292,27 @@ What the `rules` feature generates from it depends on the tool:
   ```
 
   `rulesync import` recognizes the block for every supported language and strips it (with a warning, since the instruction is not carried into `.rulesync/rules/` — the `language` key in `rulesync.jsonc` is what keeps it), so importing a generated file and generating again yields one block rather than two. `rulesync convert` re-adds the block to the destination's root file when `language` is set.
+
+## Symlink Escape
+
+By default generation refuses to write through a symbolic link that leads out of the output root: a checked-out repository can carry a link at an output path — an `AGENTS.md` pointing at `~/.bashrc`, or a tool directory pointing at `/etc` — and following it would land the generated content wherever the link points. Such a file or directory is skipped with a warning naming the path. See the "Symlinks" section of the [File Formats](../reference/file-formats.md#symlinks) reference for the full default behavior, including the orphan sweep under `--delete`.
+
+`allowSymlinkEscape` turns that refusal off. When the links are yours, global-scope generation then follows a link out of the output root exactly as it follows one that stays inside — for a single generated file, a directory unit such as a skill (its `SKILL.md`, supporting files, and executable bit), the config files Rulesync rewrites, and the orphan sweep under `--delete`.
+
+```jsonc
+// rulesync.jsonc
+{
+  "targets": ["claudecode"],
+  "global": true,
+  "allowSymlinkEscape": true,
+}
+```
+
+It is a permission, not a trigger: it never causes a write that would not otherwise happen. The CLI flag is `--allow-symlink-escape` (and `--allow-symlink-escape=false` to override a configuration that turned it on), and the priority is the usual one — CLI over `rulesync.local.jsonc` over `rulesync.jsonc`.
+
+Two limits are deliberate. The key applies to global scope only: in project scope it is accepted but ignored with a warning, because the output root there is the project directory and a link out of it is what the default already refuses — setting it never turns on global scope. And a link that cannot be resolved at all, a dangling link or a cycle, is still refused with the switch on, because there is no landing path to name.
+
+For the three tools that read their profile location from an environment variable — Hermes Agent (`HERMES_HOME`), Kimi Code (`KIMI_CODE_HOME`), and deepagents-cli (`DEEPAGENTS_HOME`) — the overridden profile directory is the root the check uses, so a link that stays inside it is written through as before.
 
 ## Local Configuration
 
