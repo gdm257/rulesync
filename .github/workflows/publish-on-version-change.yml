@@ -1,0 +1,206 @@
+name: Publish on Version Change
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "package.json"
+
+permissions:
+  contents: read
+
+jobs:
+  detect-version-change:
+    name: Detect version change
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+      tag: ${{ steps.compare.outputs.tag }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          # The previous tip of main is not part of the default shallow clone.
+          fetch-depth: 0
+
+      - name: Compare package.json version
+        id: compare
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          version_at() {
+            git show "$1:package.json" 2>/dev/null \
+              | grep -m1 -E '^[[:space:]]*"version"[[:space:]]*:' \
+              | sed -E 's/.*:[[:space:]]*"([^"]+)".*/\1/'
+          }
+
+          # A branch creation or a force push has no previous tip to compare with.
+          if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "No previous commit to compare against; skipping"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BEFORE_VERSION="$(version_at "$BEFORE_SHA" || true)"
+          CURRENT_VERSION="$(version_at "$CURRENT_SHA" || true)"
+
+          if [ -z "$CURRENT_VERSION" ]; then
+            echo "::error::Could not read the version field from package.json at $CURRENT_SHA"
+            exit 1
+          fi
+
+          if [ "$BEFORE_VERSION" = "$CURRENT_VERSION" ]; then
+            echo "package.json version is unchanged ($CURRENT_VERSION); nothing to release"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          TAG="v$CURRENT_VERSION"
+          if ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid tag format derived from package.json version: $CURRENT_VERSION"
+            exit 1
+          fi
+
+          echo "Version changed: ${BEFORE_VERSION:-<unknown>} -> $CURRENT_VERSION"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  build-assets:
+    name: Build and publish release
+    needs: detect-version-change
+    if: needs.detect-version-change.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      artifact-metadata: write # Required for recording attested artifacts
+      attestations: write # Required for publishing build provenance
+      id-token: write # Required for signing build provenance with Sigstore
+      contents: write # Required for pushing the tag and publishing the release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          # Pin to the commit whose package.json version changed rather than to
+          # whatever main points at when this job starts.
+          ref: ${{ github.sha }}
+          # Fetch tags so the existence check below can see remote tags.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Start cicd-sensor
+        uses: ./.github/actions/cicd-sensor
+        with:
+          bot-id: ${{ vars.SHISHO_BOT_ID }}
+
+      - name: Configure git
+        uses: ./.github/actions/git-config
+
+      - name: Setup mise
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+        with:
+          experimental: true
+
+      - name: Install dependencies
+        # Bun is not supported by the setup action. The tracked .npmrc still
+        # routes this installation through Takumi Guard.
+        run: bun install
+
+      - name: Build binaries
+        # --bytecode precompiles the bundle so the binaries start faster. It is
+        # left off the Windows target: that binary segfaults at startup when built
+        # with --bytecode (Bun 1.3.14).
+        run: |
+          mkdir -p dist-bun
+          bun build --compile --minify --sourcemap --bytecode --target=bun-linux-x64 --outfile=dist-bun/rulesync-linux-x64 ./src/cli/index.ts
+          bun build --compile --minify --sourcemap --bytecode --target=bun-linux-arm64 --outfile=dist-bun/rulesync-linux-arm64 ./src/cli/index.ts
+          bun build --compile --minify --sourcemap --bytecode --target=bun-darwin-arm64 --outfile=dist-bun/rulesync-darwin-arm64 ./src/cli/index.ts
+          bun build --compile --minify --sourcemap --bytecode --target=bun-darwin-x64 --outfile=dist-bun/rulesync-darwin-x64 ./src/cli/index.ts
+          bun build --compile --minify --sourcemap --target=bun-windows-x64 --outfile=dist-bun/rulesync-windows-x64.exe ./src/cli/index.ts
+
+      - name: Generate checksums
+        run: |
+          cd dist-bun
+          sha256sum rulesync-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest binary build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: dist-bun/SHA256SUMS
+
+      - name: Generate JSON Schemas
+        run: pnpm generate:schema
+
+      - name: Generate repomix XML variants
+        # Deliberately Node (tsx) and not Bun: repomix skips Tinypool#destroy()
+        # when it detects Bun, so each runCli() call leaks its worker pools and
+        # they race their idle timeout into a "Terminating worker thread" crash.
+        # See scripts/generate-repomix-xml.ts and #2922.
+        run: pnpm exec tsx scripts/generate-repomix-xml.ts
+
+      - name: Bundle XML files into zip
+        run: zip repomix-xml.zip repomix-output-*.xml
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ needs.detect-version-change.outputs.tag }}
+        run: |
+          CURRENT_SHA="$(git rev-parse HEAD)"
+
+          LOCAL_TAG_EXISTS=0
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            LOCAL_TAG_EXISTS=1
+            TAG_SHA="$(git rev-list -n 1 "$TAG")"
+            if [ "$TAG_SHA" != "$CURRENT_SHA" ]; then
+              echo "::error::Tag $TAG already exists locally but points to $TAG_SHA instead of $CURRENT_SHA"
+              exit 1
+            fi
+          fi
+
+          # Query both peeled (annotated) and plain (lightweight) refs, preferring
+          # the peeled form when present so annotated tags resolve to their commit.
+          REMOTE_SHA="$(git ls-remote --tags origin "refs/tags/$TAG^{}" "refs/tags/$TAG" \
+            | awk '$2 ~ /\^\{\}$/ {peeled=$1} $2 !~ /\^\{\}$/ {plain=$1} END {print (peeled ? peeled : plain)}')"
+          if [ -n "$REMOTE_SHA" ]; then
+            if [ "$REMOTE_SHA" != "$CURRENT_SHA" ]; then
+              echo "::error::Tag $TAG already exists on origin but points to $REMOTE_SHA instead of $CURRENT_SHA"
+              exit 1
+            fi
+            echo "Tag $TAG already exists on origin and points to the current commit, skipping creation"
+            exit 0
+          fi
+
+          if [ "$LOCAL_TAG_EXISTS" -eq 1 ]; then
+            echo "Tag $TAG already exists locally and points to the current commit, pushing to origin"
+            git push origin "$TAG"
+            echo "Tag $TAG pushed"
+            exit 0
+          fi
+
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "Tag $TAG created and pushed"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ needs.detect-version-change.outputs.tag }}
+          draft: false
+          generate_release_notes: true
+          files: |
+            install.sh
+            dist-bun/rulesync-linux-x64
+            dist-bun/rulesync-linux-arm64
+            dist-bun/rulesync-darwin-arm64
+            dist-bun/rulesync-darwin-x64
+            dist-bun/rulesync-windows-x64.exe
+            dist-bun/SHA256SUMS
+            repomix-xml.zip
+            config-schema.json
+            permissions-schema.json
+            mcp-schema.json
