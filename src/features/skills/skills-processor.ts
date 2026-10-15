@@ -22,7 +22,7 @@ import { ToolTarget } from "../../types/tool-targets.js";
 import { quoteForLog, stripControlCharacters } from "../../utils/control-characters.js";
 import { formatError } from "../../utils/error.js";
 import {
-  assertWritablePathInsideRoot,
+  assertSweepPathInsideRoot,
   directoryExists,
   directoryExistsStrict,
   listFileNames,
@@ -876,7 +876,6 @@ export class SkillsProcessor extends DirFeatureProcessor {
     global = false,
     getFactory = defaultGetFactory,
     dryRun = false,
-    allowSymlinkEscape = false,
     logger,
   }: {
     outputRoot?: string;
@@ -885,7 +884,6 @@ export class SkillsProcessor extends DirFeatureProcessor {
     global?: boolean;
     getFactory?: GetFactory;
     dryRun?: boolean;
-    allowSymlinkEscape?: boolean;
     logger: Logger;
   }) {
     super({
@@ -894,7 +892,6 @@ export class SkillsProcessor extends DirFeatureProcessor {
       dryRun,
       avoidBlockScalars: toolTarget === "cursor",
       logger,
-      allowSymlinkEscape,
     });
     const result = SkillsProcessorToolTargetSchema.safeParse(toolTarget);
     if (!result.success) {
@@ -1412,12 +1409,11 @@ export class SkillsProcessor extends DirFeatureProcessor {
         continue;
       }
       try {
-        if (!this.allowSymlinkEscape) {
-          await assertWritablePathInsideRoot({
-            rootPath: this.outputRoot,
-            targetPath: skillsDirPath,
-          });
-        }
+        await assertSweepPathInsideRoot({
+          rootPath: this.outputRoot,
+          targetPath: skillsDirPath,
+          allowSymlinkEscape: this.allowSymlinkEscape,
+        });
       } catch (error) {
         this.logger.warn(
           `Skipping the orphan sweep for ${quoteForLog(skillsDirPath)}; nothing under it is ` +
@@ -1451,12 +1447,11 @@ export class SkillsProcessor extends DirFeatureProcessor {
         kind: "directory",
       });
       for (const dirName of dirNames) {
-        if (!this.allowSymlinkEscape) {
-          await assertWritablePathInsideRoot({
-            rootPath: skillsDirPath,
-            targetPath: join(skillsDirPath, dirName),
-          });
-        }
+        await assertSweepPathInsideRoot({
+          rootPath: skillsDirPath,
+          targetPath: join(skillsDirPath, dirName),
+          allowSymlinkEscape: this.allowSymlinkEscape,
+        });
         if (
           !(await this.isOwnedSkillDir({
             factory,
@@ -1531,12 +1526,11 @@ export class SkillsProcessor extends DirFeatureProcessor {
       });
       for (const fileName of fileNames) {
         const filePath = join(skillsDirPath, fileName);
-        if (!this.allowSymlinkEscape) {
-          await assertWritablePathInsideRoot({
-            rootPath: skillsDirPath,
-            targetPath: filePath,
-          });
-        }
+        await assertSweepPathInsideRoot({
+          rootPath: skillsDirPath,
+          targetPath: filePath,
+          allowSymlinkEscape: this.allowSymlinkEscape,
+        });
         // The stem is the skill's name for a tool that writes `<name>.md`,
         // which is why the enumeration above is limited to `.md` in the first
         // place: it is what the candidate is built from.

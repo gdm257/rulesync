@@ -2139,6 +2139,55 @@ Test agent content`;
       expect(filesToDelete[0]?.getRelativeFilePath()).toBe("test-agent.md");
     });
 
+    it.skipIf(process.platform === "win32")(
+      "should warn and skip an agents root that is a symbolic link",
+      async () => {
+        const logger = createMockLogger();
+        const processor = new SubagentsProcessor({
+          logger,
+          outputRoot: testDir,
+          toolTarget: "claudecode",
+        });
+        const linkedAgentsDir = join(testDir, "dotfiles", "agents");
+        await writeFileContent(
+          join(linkedAgentsDir, "stale.md"),
+          "---\nname: stale\ndescription: Test agent\n---\nContent",
+        );
+        await ensureDir(join(testDir, ".claude"));
+        await symlink(linkedAgentsDir, join(testDir, ".claude", "agents"));
+
+        expect(await processor.loadToolFiles({ forDeletion: true })).toEqual([]);
+        expect(logger.warn).toHaveBeenCalledWith(
+          expect.stringContaining("Skipping the orphan sweep"),
+        );
+      },
+    );
+
+    it.skipIf(process.platform === "win32")(
+      "should sweep an agents root that is a symbolic link when the run allows the escape",
+      async () => {
+        const logger = createMockLogger();
+        const processor = new SubagentsProcessor({
+          logger,
+          outputRoot: testDir,
+          toolTarget: "claudecode",
+        });
+        (processor as unknown as { allowSymlinkEscape: boolean }).allowSymlinkEscape = true;
+        const linkedAgentsDir = join(testDir, "dotfiles", "agents");
+        await writeFileContent(
+          join(linkedAgentsDir, "stale.md"),
+          "---\nname: stale\ndescription: Test agent\n---\nContent",
+        );
+        await ensureDir(join(testDir, ".claude"));
+        await symlink(linkedAgentsDir, join(testDir, ".claude", "agents"));
+
+        const filesToDelete = await processor.loadToolFiles({ forDeletion: true });
+
+        expect(filesToDelete.map((file) => file.getRelativeFilePath())).toEqual(["stale.md"]);
+        expect(logger.warn).not.toHaveBeenCalled();
+      },
+    );
+
     it("should work for all supported tool targets", async () => {
       const targets: SubagentsProcessorToolTarget[] = [
         "agentsmd",

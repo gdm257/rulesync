@@ -2440,6 +2440,34 @@ Test skill content`;
       },
     );
 
+    it.skipIf(process.platform === "win32")(
+      "should sweep a skills root that is a symbolic link when the run allows the escape",
+      async () => {
+        // The writes already went through the link, so a run that allows the
+        // escape sweeps its landing too.
+        const logger = createMockLogger();
+        const processor = new SkillsProcessor({
+          logger,
+          outputRoot: testDir,
+          toolTarget: "claudecode",
+          allowSymlinkEscape: true,
+        });
+        const linkedSkillsDir = join(testDir, "dotfiles", "claude-skills");
+        await writeFileContent(
+          join(linkedSkillsDir, "stale", "SKILL.md"),
+          "---\nname: stale\ndescription: Test skill\n---\nContent",
+        );
+        await ensureDir(join(testDir, ".claude"));
+        await symlink(linkedSkillsDir, join(testDir, ".claude", "skills"));
+
+        const dirsToDelete = await processor.loadToolDirsToDelete();
+
+        expect(dirsToDelete.map((dir) => dir.getDirName())).toEqual(["stale"]);
+        expect(logger.warn).not.toHaveBeenCalled();
+      },
+      },
+    );
+
     it("should not sweep a committed project skills root (gitlabduo)", async () => {
       // GitLab Duo reads project skills from the repository-root `skills/`,
       // which routinely holds hand-authored skills rulesync never generated.

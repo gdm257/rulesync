@@ -838,6 +838,30 @@ describe("DirFeatureProcessor", () => {
     );
 
     it.skipIf(process.platform === "win32")(
+      "should sweep a generated directory that is a symbolic link when the run allows the escape",
+      async () => {
+        // The writes already went through the link, so the sweep follows them
+        // to the landing. The link itself is left where it is.
+        const logger = createMockLogger();
+        const processor = new TestDirProcessor({ logger, outputRoot: testDir });
+        (processor as unknown as { allowSymlinkEscape: boolean }).allowSymlinkEscape = true;
+        const linkedDir = join(testDir, "vendored");
+        await writeFiles(linkedDir, ["precious.md", join("sub", "nested.md")]);
+        const dirPath = join(testDir, "demo");
+        await symlink(linkedDir, dirPath, "dir");
+
+        const count = await processor.removeOrphanFilesInAiDirs({
+          generatedDirs: [createMockDirWithFiles({ dirPath, mainFileBody: "body" })],
+          isClaimed: () => false,
+        });
+
+        expect(count).toBe(2);
+        expect(removeFile).toHaveBeenCalledWith(join(dirPath, "precious.md"));
+        expect(removeFile).toHaveBeenCalledWith(join(dirPath, "sub", "nested.md"));
+      },
+    );
+
+    it.skipIf(process.platform === "win32")(
       "should not descend into a symlinked directory",
       async () => {
         // The deletion that matters: a link to a directory outside the tree must

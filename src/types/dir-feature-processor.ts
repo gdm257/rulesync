@@ -11,7 +11,7 @@ import { formatError } from "../utils/error.js";
 import {
   addTrailingNewline,
   applyFileMode,
-  assertWritablePathInsideRoot,
+  assertSweepPathInsideRoot,
   ensureDir,
   listFilePathsRecursively,
   pathEscapesRoot,
@@ -554,8 +554,16 @@ export abstract class DirFeatureProcessor extends RulesyncSourceConsumer {
       // the home directory, has its sweep skipped there, and a directory
       // inside it must not be swept through the link here either.
       try {
-        await assertWritablePathInsideRoot({ rootPath: this.outputRoot, targetPath: root });
-        await assertWritablePathInsideRoot({ rootPath: this.outputRoot, targetPath: dirPath });
+        await assertSweepPathInsideRoot({
+          rootPath: this.outputRoot,
+          targetPath: root,
+          allowSymlinkEscape: this.allowSymlinkEscape,
+        });
+        await assertSweepPathInsideRoot({
+          rootPath: this.outputRoot,
+          targetPath: dirPath,
+          allowSymlinkEscape: this.allowSymlinkEscape,
+        });
       } catch (error) {
         this.logger.warn(
           `Refusing to sweep ${quotedDirPath}: ${stripControlCharacters(formatError(error))}`,
