@@ -16,6 +16,7 @@ import {
   writablePathEscapesRoot,
   writeFileContent,
   writeLandingPath,
+  writePathResolves,
 } from "../utils/file.js";
 import type { Logger } from "../utils/logger.js";
 import type { WriteResult } from "../utils/result.js";
@@ -429,10 +430,11 @@ export async function refusesWriteOutsideRoot({
   if (!(await writablePathEscapesRoot({ rootPath, targetPath }))) {
     return false;
   }
-  if (allowSymlinkEscape) {
+  if (allowSymlinkEscape && (await writePathResolves(targetPath))) {
+    const landingPath = (await writeLandingPath(targetPath)) ?? targetPath;
     logger.debug(
       `allowSymlinkEscape is on: writing ${quoteForLog(targetPath)} through a symbolic ` +
-        `link that resolves outside ${quoteForLog(rootPath)}.`,
+        `link that resolves outside ${quoteForLog(rootPath)}, landing at ${quoteForLog(landingPath)}.`,
     );
     return false;
   }
@@ -470,7 +472,7 @@ async function refusesDeleteOutsideRoot({
   if (!(await writablePathEscapesRoot({ rootPath, targetPath: dirPath }))) {
     return false;
   }
-  if (allowSymlinkEscape) {
+  if (allowSymlinkEscape && (await writePathResolves(dirPath))) {
     logger.debug(
       `allowSymlinkEscape is on: deleting through ${quoteForLog(dirPath)}, which ` +
         `resolves outside ${quoteForLog(rootPath)} through a symbolic link.`,

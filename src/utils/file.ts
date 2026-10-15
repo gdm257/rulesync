@@ -85,7 +85,7 @@ export async function assertSweepPathInsideRoot(params: {
   allowSymlinkEscape?: boolean;
 }): Promise<void> {
   const { rootPath, targetPath, allowSymlinkEscape = false } = params;
-  if (allowSymlinkEscape) return;
+  if (allowSymlinkEscape && (await writePathResolves(targetPath))) return;
   await assertWritablePathInsideRoot({ rootPath, targetPath });
 }
 
@@ -783,6 +783,14 @@ function isNotADirectoryError(error: unknown): boolean {
 }
 
 /**
+ * Whether `error` is the ELOOP a lookup through a link cycle raises. A cycle on
+ * the way means no landing can be judged at all.
+ */
+function isSymbolicLinkLoopError(error: unknown): boolean {
+  return someErrorInChain(error, (candidate) => "code" in candidate && candidate.code === "ELOOP");
+}
+
+/**
  * Where a write to `targetPath` lands once the OS has followed every link on
  * the way there, or `null` when the links form a cycle no write can get
  * through. The target itself usually does not exist yet, so the walk goes
@@ -866,6 +874,33 @@ export async function writeLandingPath(targetPath: string): Promise<string | nul
 function splitAbsolutePath(absolutePath: string): { root: string; segments: string[] } {
   const root = parse(absolutePath).root;
   return { root, segments: splitPathSegments(absolutePath.slice(root.length)) };
+}
+
+/**
+ * Whether every link on the way to `targetPath` resolves. Past a dangling link
+ * or a cycle no landing can be judged, so no switch may allow a write there.
+ */
+export async function writePathResolves(targetPath: string): Promise<boolean> {
+  let existingPath = targetPath;
+  while (true) {
+    try {
+      await lstat(existingPath);
+    } catch (error) {
+      if (isSymbolicLinkLoopError(error)) {
+        return false;
+      }
+      if (!isFileNotFoundError(error) && !isNotADirectoryError(error)) {
+        throw error;
+      }
+      const parentPath = dirname(existingPath);
+      if (parentPath === existingPath) {
+        return true;
+      }
+      existingPath = parentPath;
+      continue;
+    }
+    return !(await isPresentButUnresolvable(existingPath));
+  }
 }
 
 /**
