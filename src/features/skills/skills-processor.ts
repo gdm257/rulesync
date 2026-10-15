@@ -1412,10 +1412,12 @@ export class SkillsProcessor extends DirFeatureProcessor {
         continue;
       }
       try {
-        await assertWritablePathInsideRoot({
-          rootPath: this.outputRoot,
-          targetPath: skillsDirPath,
-        });
+        if (!this.allowSymlinkEscape) {
+          await assertWritablePathInsideRoot({
+            rootPath: this.outputRoot,
+            targetPath: skillsDirPath,
+          });
+        }
       } catch (error) {
         this.logger.warn(
           `Skipping the orphan sweep for ${quoteForLog(skillsDirPath)}; nothing under it is ` +
@@ -1449,10 +1451,12 @@ export class SkillsProcessor extends DirFeatureProcessor {
         kind: "directory",
       });
       for (const dirName of dirNames) {
-        await assertWritablePathInsideRoot({
-          rootPath: skillsDirPath,
-          targetPath: join(skillsDirPath, dirName),
-        });
+        if (!this.allowSymlinkEscape) {
+          await assertWritablePathInsideRoot({
+            rootPath: skillsDirPath,
+            targetPath: join(skillsDirPath, dirName),
+          });
+        }
         if (
           !(await this.isOwnedSkillDir({
             factory,
@@ -1527,10 +1531,12 @@ export class SkillsProcessor extends DirFeatureProcessor {
       });
       for (const fileName of fileNames) {
         const filePath = join(skillsDirPath, fileName);
-        await assertWritablePathInsideRoot({
-          rootPath: skillsDirPath,
-          targetPath: filePath,
-        });
+        if (!this.allowSymlinkEscape) {
+          await assertWritablePathInsideRoot({
+            rootPath: skillsDirPath,
+            targetPath: filePath,
+          });
+        }
         // The stem is the skill's name for a tool that writes `<name>.md`,
         // which is why the enumeration above is limited to `.md` in the first
         // place: it is what the candidate is built from.

@@ -106,10 +106,12 @@ export async function activateHermesProjectPlugins({
   pluginNames,
   dryRun,
   logger,
+  allowSymlinkEscape = false,
 }: {
   pluginNames: readonly HermesProjectPluginName[];
   dryRun: boolean;
   logger: Logger;
+  allowSymlinkEscape?: boolean;
 }): Promise<FeatureGenerateResult> {
   if (pluginNames.length === 0) {
     return { count: 0, paths: [], hasDiff: false, sourceLoadFailed: false };
@@ -123,7 +125,14 @@ export async function activateHermesProjectPlugins({
   const configPath = join(configRoot, relativeConfigPath);
   // The same file the commands processor rewrites, guarded the same way: a
   // link planted at the config path must not send the rewrite elsewhere.
-  if (await refusesWriteOutsideRoot({ logger, rootPath: configRoot, targetPath: configPath })) {
+  if (
+    await refusesWriteOutsideRoot({
+      logger,
+      rootPath: configRoot,
+      targetPath: configPath,
+      allowSymlinkEscape,
+    })
+  ) {
     return { count: 0, paths: [], hasDiff: false, sourceLoadFailed: false };
   }
   const existingConfig = (await readFileContentOrNull(configPath)) ?? "";

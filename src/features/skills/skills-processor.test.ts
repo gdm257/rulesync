@@ -2340,6 +2340,106 @@ Test skill content`;
       },
     );
 
+    it.skipIf(process.platform === "win32")(
+      "should write and sweep an escaped skills root when allowSymlinkEscape is on",
+      async () => {
+        // A skills root that is a link out of the output root. With the switch
+        // on, the whole directory unit is written through the link and stale
+        // entries are swept at the real landing point; the link itself is never
+        // deleted.
+        const logger = createMockLogger();
+        const root = join(testDir, "root");
+        const processor = new SkillsProcessor({
+          logger,
+          outputRoot: root,
+          toolTarget: "claudecode",
+          allowSymlinkEscape: true,
+        });
+        const linkedSkillsDir = join(testDir, "outside-skills");
+        await writeFileContent(
+          join(linkedSkillsDir, "stale-skill", "SKILL.md"),
+          "---\nname: stale-skill\ndescription: Stale\n---\nStale",
+        );
+        await writeFileContent(
+          join(linkedSkillsDir, "stale-skill", "stale-note.md"),
+          "stale",
+        );
+        await ensureDir(join(root, ".claude"));
+        await symlink(linkedSkillsDir, join(root, ".claude", "skills"));
+
+        const rulesyncSkill = new RulesyncSkill({
+          outputRoot: root,
+          relativeDirPath: RULESYNC_SKILLS_RELATIVE_DIR_PATH,
+          dirName: "live-skill",
+          frontmatter: { name: "live-skill", description: "Live" },
+          body: "Live body",
+          otherFiles: [
+            { relativeFilePathToDirPath: "reference.md", fileBuffer: Buffer.from("live ref\n") },
+          ],
+          validate: false,
+        });
+        const toolDirs = await processor.convertRulesyncDirsToToolDirs([rulesyncSkill]);
+        const writeResult = await processor.writeAiDirs(toolDirs);
+        expect(writeResult.count).toBe(1);
+
+        const landingDir = join(linkedSkillsDir, "live-skill");
+        expect(await fileExists(join(landingDir, "SKILL.md"))).toBe(true);
+
+        const dirsToDelete = await processor.loadToolDirsToDelete();
+        expect(dirsToDelete.map((d) => d.getDirName()).sort()).toEqual([
+          "live-skill",
+          "stale-skill",
+        ]);
+
+        const removedCount = await processor.removeOrphanAiDirs(dirsToDelete, toolDirs);
+        expect(removedCount).toBe(1);
+
+        expect(await directoryExists(join(linkedSkillsDir, "stale-skill"))).toBe(false);
+        expect(await fileExists(join(landingDir, "SKILL.md"))).toBe(true);
+        expect(await directoryExists(join(root, ".claude", "skills"))).toBe(true);
+      },
+    );
+
+    it.skipIf(process.platform === "win32")(
+      "should hold the whole escaped skills root when allowSymlinkEscape is off",
+      async () => {
+        const logger = createMockLogger();
+        const root = join(testDir, "root");
+        const processor = new SkillsProcessor({
+          logger,
+          outputRoot: root,
+          toolTarget: "claudecode",
+        });
+        const linkedSkillsDir = join(testDir, "outside-skills");
+        await writeFileContent(
+          join(linkedSkillsDir, "stale-skill", "SKILL.md"),
+          "---\nname: stale-skill\ndescription: Stale\n---\nStale",
+        );
+        await ensureDir(join(root, ".claude"));
+        await symlink(linkedSkillsDir, join(root, ".claude", "skills"));
+
+        const rulesyncSkill = new RulesyncSkill({
+          outputRoot: root,
+          relativeDirPath: RULESYNC_SKILLS_RELATIVE_DIR_PATH,
+          dirName: "live-skill",
+          frontmatter: { name: "live-skill", description: "Live" },
+          body: "Live body",
+          validate: false,
+        });
+        const toolDirs = await processor.convertRulesyncDirsToToolDirs([rulesyncSkill]);
+        const writeResult = await processor.writeAiDirs(toolDirs);
+        expect(writeResult.count).toBe(0);
+        expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("resolves outside"));
+
+        expect(await processor.loadToolDirsToDelete()).toEqual([]);
+        expect(logger.warn).toHaveBeenCalledWith(
+          expect.stringContaining("Skipping the orphan sweep"),
+        );
+
+        expect(await directoryExists(join(linkedSkillsDir, "stale-skill"))).toBe(true);
+      },
+    );
+
     it("should not sweep a committed project skills root (gitlabduo)", async () => {
       // GitLab Duo reads project skills from the repository-root `skills/`,
       // which routinely holds hand-authored skills rulesync never generated.

@@ -1317,6 +1317,7 @@ export class CommandsProcessor extends FeatureProcessor {
         logger: this.logger,
         rootPath: this.outputRoot,
         targetPath: configPath,
+        allowSymlinkEscape: this.allowSymlinkEscape,
       })
     ) {
       return changedCount;
@@ -1354,6 +1355,7 @@ export class CommandsProcessor extends FeatureProcessor {
         logger: this.logger,
         rootPath: this.outputRoot,
         targetPath: configPath,
+        allowSymlinkEscape: this.allowSymlinkEscape,
       })
     ) {
       return 0;

@@ -30,10 +30,12 @@ export async function ensureAntigravityPluginManifests({
   outputRoots,
   dryRun,
   logger,
+  allowSymlinkEscape = false,
 }: {
   outputRoots: readonly string[];
   dryRun: boolean;
   logger: Logger;
+  allowSymlinkEscape?: boolean;
 }): Promise<FeatureGenerateResult> {
   const paths: string[] = [];
 
@@ -42,7 +44,14 @@ export async function ensureAntigravityPluginManifests({
     if (await hasAntigravityPluginManifest(outputRoot)) {
       continue;
     }
-    if (await refusesWriteOutsideRoot({ logger, rootPath: outputRoot, targetPath: filePath })) {
+    if (
+      await refusesWriteOutsideRoot({
+        logger,
+        rootPath: outputRoot,
+        targetPath: filePath,
+        allowSymlinkEscape,
+      })
+    ) {
       continue;
     }
 

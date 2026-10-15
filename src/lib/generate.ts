@@ -995,6 +995,7 @@ export async function generate(params: {
     pluginNames: await collectHermesProjectPluginNames({ config, resultsById }),
     dryRun: config.isPreviewMode(),
     logger,
+    allowSymlinkEscape: config.getAllowSymlinkEscape(),
   });
 
   // Written after the sweep, which never claims the manifest, so `--delete`
@@ -1006,6 +1007,7 @@ export async function generate(params: {
         : [],
     dryRun: config.isPreviewMode(),
     logger,
+    allowSymlinkEscape: config.getAllowSymlinkEscape(),
   });
 
   if (!skillsResult) {
