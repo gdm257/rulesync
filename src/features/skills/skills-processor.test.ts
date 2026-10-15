@@ -2360,10 +2360,7 @@ Test skill content`;
           join(linkedSkillsDir, "stale-skill", "SKILL.md"),
           "---\nname: stale-skill\ndescription: Stale\n---\nStale",
         );
-        await writeFileContent(
-          join(linkedSkillsDir, "stale-skill", "stale-note.md"),
-          "stale",
-        );
+        await writeFileContent(join(linkedSkillsDir, "stale-skill", "stale-note.md"), "stale");
         await ensureDir(join(root, ".claude"));
         await symlink(linkedSkillsDir, join(root, ".claude", "skills"));
 

@@ -715,16 +715,16 @@ This is useful when you want to translate a one-shot tool-to-tool conversion (e.
 
 ### Options
 
-| Option                      | Description                                                                                                               | Default   |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `--from <tool>`             | Source tool to convert from (single tool, e.g., `cursor`, `claudecode`)                                                   | Required  |
-| `--to <tools>`              | Comma-separated list of destination tools (e.g., `copilot,claudecode`)                                                    | Required  |
-| `--features, -f <features>` | Comma-separated list of features to convert (rules, commands, subagents, skills, ignore, mcp, hooks, permissions, checks) | `*` (all) |
-| `--verbose, -V`             | Verbose output                                                                                                            | `false`   |
-| `--silent, -s`              | Suppress all output                                                                                                       | `false`   |
-| `--global, -g`              | Convert for global (user scope) configuration files                                                                       | `false`   |
-| `--allow-symlink-escape`    | Follow a symbolic link at an output path even when it resolves outside the output root, writing the converted files at its target. Global scope only; ignored with a warning in project scope. See [File Formats](./file-formats.md#symlinks)            | `false`   |
-| `--dry-run`                 | Show changes without writing files                                                                                        | `false`   |
+| Option                      | Description                                                                                                                                                                                                                                   | Default   |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `--from <tool>`             | Source tool to convert from (single tool, e.g., `cursor`, `claudecode`)                                                                                                                                                                       | Required  |
+| `--to <tools>`              | Comma-separated list of destination tools (e.g., `copilot,claudecode`)                                                                                                                                                                        | Required  |
+| `--features, -f <features>` | Comma-separated list of features to convert (rules, commands, subagents, skills, ignore, mcp, hooks, permissions, checks)                                                                                                                     | `*` (all) |
+| `--verbose, -V`             | Verbose output                                                                                                                                                                                                                                | `false`   |
+| `--silent, -s`              | Suppress all output                                                                                                                                                                                                                           | `false`   |
+| `--global, -g`              | Convert for global (user scope) configuration files                                                                                                                                                                                           | `false`   |
+| `--allow-symlink-escape`    | Follow a symbolic link at an output path even when it resolves outside the output root, writing the converted files at its target. Global scope only; ignored with a warning in project scope. See [File Formats](./file-formats.md#symlinks) | `false`   |
+| `--dry-run`                 | Show changes without writing files                                                                                                                                                                                                            | `false`   |
 
 ### Examples
 
