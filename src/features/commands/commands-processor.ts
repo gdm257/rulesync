@@ -929,6 +929,7 @@ export class CommandsProcessor extends FeatureProcessor {
     getFactory = defaultGetFactory,
     dryRun = false,
     flattenedCommandNaming = "basename",
+    allowSymlinkEscape = false,
     logger,
   }: {
     outputRoot?: string;
@@ -938,9 +939,10 @@ export class CommandsProcessor extends FeatureProcessor {
     getFactory?: GetFactory;
     dryRun?: boolean;
     flattenedCommandNaming?: FlattenedCommandNaming;
+    allowSymlinkEscape?: boolean;
     logger: Logger;
   }) {
-    super({ outputRoot, inputRoots, dryRun, logger });
+    super({ outputRoot, inputRoots, dryRun, logger, allowSymlinkEscape });
     const result = CommandsProcessorToolTargetSchema.safeParse(toolTarget);
     if (!result.success) {
       throw new Error(

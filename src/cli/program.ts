@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 
 import { DEFAULT_LATEST_COUNT } from "../lib/release-notes.js";
 import { ALL_FEATURES, RulesyncFeatures } from "../types/features.js";
@@ -222,6 +222,11 @@ export function createProgram(): Command {
     .option("-V, --verbose", "Verbose output")
     .option("-s, --silent", "Suppress all output")
     .option("-g, --global", "Convert for global(user scope) configuration files")
+    .option(
+      "--allow-symlink-escape [boolean]",
+      "Write through a symbolic link that resolves outside the output root (global scope only)",
+      parseBooleanFlag,
+    )
     .option("--dry-run", "Dry run: show changes without writing files")
     .action(
       wrapCommand("convert", "CONVERT_FAILED", async (logger, options) => {
@@ -316,6 +321,11 @@ export function createProgram(): Command {
     .option(
       "--simulate-skills",
       "Generate simulated skills. This feature is only available for copilot, cursor and codexcli.",
+    )
+    .option(
+      "--allow-symlink-escape [boolean]",
+      "Write through a symbolic link that resolves outside the output root (global scope only)",
+      parseBooleanFlag,
     )
     .option(
       "--input-roots <paths...>",
@@ -422,6 +432,14 @@ export function createProgram(): Command {
     );
 
   return program;
+}
+
+/** Tri-state boolean flag: bare `--flag` is on, `=false` is an explicit off. */
+function parseBooleanFlag(raw: string | undefined): boolean | undefined {
+  if (raw === undefined) return true;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  throw new InvalidArgumentError('expected "true" or "false"');
 }
 
 function parseInstallMode(raw: string | undefined): InstallMode | undefined {

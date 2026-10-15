@@ -97,6 +97,7 @@ export abstract class DirFeatureProcessor extends RulesyncSourceConsumer {
   protected readonly inputRoots: readonly [string, ...string[]];
   protected readonly dryRun: boolean;
   protected readonly avoidBlockScalars: boolean;
+  protected readonly allowSymlinkEscape: boolean;
   protected readonly logger: Logger;
   /**
    * Paths the orphan sweeps deleted (or, under `--dry-run`, would delete),
@@ -108,12 +109,14 @@ export abstract class DirFeatureProcessor extends RulesyncSourceConsumer {
     inputRoots,
     dryRun = false,
     avoidBlockScalars = false,
+    allowSymlinkEscape = false,
     logger,
   }: {
     outputRoot?: string;
     inputRoots?: readonly [string, ...string[]] | readonly string[];
     dryRun?: boolean;
     avoidBlockScalars?: boolean;
+    allowSymlinkEscape?: boolean;
     logger: Logger;
   }) {
     super();
@@ -127,6 +130,7 @@ export abstract class DirFeatureProcessor extends RulesyncSourceConsumer {
 
     this.dryRun = dryRun;
     this.avoidBlockScalars = avoidBlockScalars;
+    this.allowSymlinkEscape = allowSymlinkEscape;
     this.logger = logger;
   }
 
@@ -181,6 +185,7 @@ export abstract class DirFeatureProcessor extends RulesyncSourceConsumer {
         logger: this.logger,
         rootPath,
         targetPaths: writtenPaths,
+        allowSymlinkEscape: this.allowSymlinkEscape,
       })) ||
       (await refusesDirWriteOntoRoot({
         logger: this.logger,

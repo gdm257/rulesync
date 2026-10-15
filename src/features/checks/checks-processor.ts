@@ -286,6 +286,7 @@ export class ChecksProcessor extends FeatureProcessor {
     global = false,
     getFactory = defaultGetFactory,
     dryRun = false,
+    allowSymlinkEscape = false,
     logger,
   }: {
     outputRoot?: string;
@@ -294,9 +295,10 @@ export class ChecksProcessor extends FeatureProcessor {
     global?: boolean;
     getFactory?: GetFactory;
     dryRun?: boolean;
+    allowSymlinkEscape?: boolean;
     logger: Logger;
   }) {
-    super({ outputRoot, inputRoots, dryRun, logger });
+    super({ outputRoot, inputRoots, dryRun, logger, allowSymlinkEscape });
     const result = ChecksProcessorToolTargetSchema.safeParse(toolTarget);
     if (!result.success) {
       throw new Error(

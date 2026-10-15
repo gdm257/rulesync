@@ -42,6 +42,7 @@ export abstract class FeatureProcessor extends RulesyncSourceConsumer {
   protected readonly inputRoots: readonly [string, ...string[]];
   protected readonly dryRun: boolean;
   protected readonly logger: Logger;
+  protected readonly allowSymlinkEscape: boolean;
   /**
    * Paths the orphan sweep deleted (or, under `--dry-run`, would delete),
    * relative to the output root like the paths `writeAiFiles` reports.
@@ -52,11 +53,13 @@ export abstract class FeatureProcessor extends RulesyncSourceConsumer {
     inputRoots,
     dryRun = false,
     logger,
+    allowSymlinkEscape = false,
   }: {
     outputRoot?: string;
     inputRoots?: readonly [string, ...string[]] | readonly string[];
     dryRun?: boolean;
     logger: Logger;
+    allowSymlinkEscape?: boolean;
   }) {
     super();
 
@@ -69,6 +72,7 @@ export abstract class FeatureProcessor extends RulesyncSourceConsumer {
 
     this.dryRun = dryRun;
     this.logger = logger;
+    this.allowSymlinkEscape = allowSymlinkEscape;
   }
 
   abstract loadRulesyncFiles(): Promise<RulesyncFile[]>;
@@ -118,6 +122,7 @@ export abstract class FeatureProcessor extends RulesyncSourceConsumer {
           logger: this.logger,
           rootPath: aiFile.getOutputRoot(),
           targetPath: filePath,
+          allowSymlinkEscape: this.allowSymlinkEscape,
         })
       ) {
         continue;
@@ -228,7 +233,12 @@ export abstract class FeatureProcessor extends RulesyncSourceConsumer {
       let refused = refusedDirs.get(cacheKey);
       if (refused === undefined) {
         // Asked before the dry-run branch so `--check` and a real run agree.
-        refused = await refusesDeleteOutsideRoot({ logger: this.logger, rootPath, dirPath });
+        refused = await refusesDeleteOutsideRoot({
+          logger: this.logger,
+          rootPath,
+          dirPath,
+          allowSymlinkEscape: this.allowSymlinkEscape,
+        });
         refusedDirs.set(cacheKey, refused);
       }
       if (refused) {
@@ -404,12 +414,21 @@ export async function refusesWriteOutsideRoot({
   logger,
   rootPath,
   targetPath,
+  allowSymlinkEscape = false,
 }: {
   logger: Logger;
   rootPath: string;
   targetPath: string;
+  allowSymlinkEscape?: boolean;
 }): Promise<boolean> {
   if (!(await writablePathEscapesRoot({ rootPath, targetPath }))) {
+    return false;
+  }
+  if (allowSymlinkEscape) {
+    logger.debug(
+      `allowSymlinkEscape is on: writing ${quoteForLog(targetPath)} through a symbolic ` +
+        `link that resolves outside ${quoteForLog(rootPath)}.`,
+    );
     return false;
   }
   logger.warn(
@@ -436,12 +455,21 @@ async function refusesDeleteOutsideRoot({
   logger,
   rootPath,
   dirPath,
+  allowSymlinkEscape = false,
 }: {
   logger: Logger;
   rootPath: string;
   dirPath: string;
+  allowSymlinkEscape?: boolean;
 }): Promise<boolean> {
   if (!(await writablePathEscapesRoot({ rootPath, targetPath: dirPath }))) {
+    return false;
+  }
+  if (allowSymlinkEscape) {
+    logger.debug(
+      `allowSymlinkEscape is on: deleting through ${quoteForLog(dirPath)}, which ` +
+        `resolves outside ${quoteForLog(rootPath)} through a symbolic link.`,
+    );
     return false;
   }
   logger.warn(
@@ -460,13 +488,15 @@ export async function refusesAnyWriteOutsideRoot({
   logger,
   rootPath,
   targetPaths,
+  allowSymlinkEscape = false,
 }: {
   logger: Logger;
   rootPath: string;
   targetPaths: readonly string[];
+  allowSymlinkEscape?: boolean;
 }): Promise<boolean> {
   for (const targetPath of targetPaths) {
-    if (await refusesWriteOutsideRoot({ logger, rootPath, targetPath })) {
+    if (await refusesWriteOutsideRoot({ logger, rootPath, targetPath, allowSymlinkEscape })) {
       return true;
     }
   }

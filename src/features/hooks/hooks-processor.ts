@@ -1275,6 +1275,7 @@ export class HooksProcessor extends FeatureProcessor {
     global = false,
     dryRun = false,
     preserveUnownedHooks = false,
+    allowSymlinkEscape = false,
     logger,
   }: {
     outputRoot?: string;
@@ -1283,9 +1284,10 @@ export class HooksProcessor extends FeatureProcessor {
     global?: boolean;
     dryRun?: boolean;
     preserveUnownedHooks?: boolean;
+    allowSymlinkEscape?: boolean;
     logger: Logger;
   }) {
-    super({ outputRoot, inputRoots, dryRun, logger });
+    super({ outputRoot, inputRoots, dryRun, logger, allowSymlinkEscape });
     const result = HooksProcessorToolTargetSchema.safeParse(toolTarget);
     if (!result.success) {
       throw new Error(

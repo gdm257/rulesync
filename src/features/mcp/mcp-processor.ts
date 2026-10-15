@@ -1104,6 +1104,7 @@ export class McpProcessor extends FeatureProcessor {
     global = false,
     getFactory = defaultGetFactory,
     dryRun = false,
+    allowSymlinkEscape = false,
     logger,
   }: {
     outputRoot?: string;
@@ -1112,9 +1113,10 @@ export class McpProcessor extends FeatureProcessor {
     global?: boolean;
     getFactory?: GetFactory;
     dryRun?: boolean;
+    allowSymlinkEscape?: boolean;
     logger: Logger;
   }) {
-    super({ outputRoot, inputRoots, dryRun, logger });
+    super({ outputRoot, inputRoots, dryRun, logger, allowSymlinkEscape });
     const result = McpProcessorToolTargetSchema.safeParse(toolTarget);
     if (!result.success) {
       throw new Error(

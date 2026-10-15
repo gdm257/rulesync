@@ -729,6 +729,7 @@ export class PermissionsProcessor extends FeatureProcessor {
     toolTarget,
     global = false,
     dryRun = false,
+    allowSymlinkEscape = false,
     logger,
   }: {
     outputRoot?: string;
@@ -736,9 +737,10 @@ export class PermissionsProcessor extends FeatureProcessor {
     toolTarget: ToolTarget;
     global?: boolean;
     dryRun?: boolean;
+    allowSymlinkEscape?: boolean;
     logger: Logger;
   }) {
-    super({ outputRoot, inputRoots, dryRun, logger });
+    super({ outputRoot, inputRoots, dryRun, logger, allowSymlinkEscape });
     const result = PermissionsProcessorToolTargetSchema.safeParse(toolTarget);
     if (!result.success) {
       throw new Error(
