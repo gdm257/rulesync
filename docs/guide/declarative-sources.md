@@ -91,6 +91,8 @@ Each entry in `sources` accepts:
 | `registry`  | `string`   | npm transport only. Base URL of the npm-compatible registry. Defaults to `https://registry.npmjs.org`.                                                                                                                                                                     |
 | `tokenEnv`  | `string`   | npm transport only. Name of the environment variable holding the registry token. Defaults to `NPM_TOKEN`.                                                                                                                                                                  |
 
+An empty `skills` or `rules` list fails only the source that declares it, in `--frozen` mode too: the other sources are still installed into `.curated/`, and then `install` exits with an error that counts the failed sources.
+
 Rules are flat source files: only direct `.md` children of `rulesPath` are discovered. Nested rule files are not installed. Fetched rules are written to `.rulesync/rules/.curated/<rule-name>.md`; during generation they behave as if they were ordinary files directly under `.rulesync/rules/`.
 
 > **Repository-root paths (`path: "."`):** When `path` is `""`, `"."`, or `"./"` (with the `git` transport), rulesync disables sparse-checkout and fetches the **entire** repository tree, then groups each top-level directory as a skill. This is useful for single-skill repositories whose `SKILL.md` lives at the repo root (`<repo>/SKILL.md`) rather than under a `skills/` container. Because the whole tree is fetched, prefer a narrower `path` for large repositories; the fetch is still bounded by rulesync's file-count, total-size, and depth limits.
@@ -126,7 +128,7 @@ When `rulesync install` runs and `sources` is configured:
 3. **Filtering** — Only the names selected by `skills` and `rules` are fetched. Omitting both fields retains the historical behavior of fetching all skills.
 4. **Precedence rules**:
    - **Local inputs win within one source tree** — Rules and skills outside `.curated/` take precedence over a same-named curated artifact in that input root. Across multiple `inputRoots`, root order remains primary: a later root replaces an earlier root's effective artifact even when the later artifact is curated.
-   - **First-declared source wins** — If two sources provide an artifact with the same name, the one declared first in the `sources` array is used.
+   - **First-declared source wins** — If two sources provide an artifact with the same name, the one declared first in the `sources` array is used. This holds even though GitHub-transport sources are downloaded concurrently (up to 4 sources and 10 requests at a time): writes, name-collision checks and lockfile updates still run one source at a time in declared order. git and npm transport sources are fetched one at a time.
 5. **Output** — Fetched rules are written to `.rulesync/rules/.curated/<rule-name>.md`; fetched skills are written to `.rulesync/skills/.curated/<skill-name>/`. Both directories are automatically added to `.gitignore` by `rulesync gitignore`. A skill's supporting file that the source records as executable keeps that bit in `.curated/` (mode `0755`), so `rulesync generate` carries it into each generated skill directory and a `scripts/run.sh` the skill tells the agent to run stays runnable. The GitHub transport reads the mode from the repository tree (git mode `100755`) with one extra request per source, and only when a fetched skill has files beside `SKILL.md`; if the tree is cut short or cannot be read, the files are still installed without the bit and a warning says so. The git transport takes the bit from the checked-out file, and the npm transport from the tarball entry's mode.
 
 ## Install Modes
@@ -236,7 +238,7 @@ rulesync generate
 
 ## Lockfile
 
-The lockfile at `rulesync.lock` (at the project root) records the resolved commit SHA, the skill and rule selections each entry was written for, and per-artifact integrity hashes for each source so that builds are reproducible. Rulesync verifies cached rule content against these hashes before reusing it. It is safe to commit this file. An example:
+The lockfile at `rulesync.lock` (at the project root) records the resolved commit SHA, the skill and rule selections each entry was written for, and per-artifact integrity hashes for each source so that builds are reproducible. Rulesync verifies cached rule and skill content against these hashes before reusing it: a curated rule or skill whose files were edited, added, or removed in place is fetched again at its locked ref (under `--frozen` too) and restored to the locked content. Two cases are checked for presence only: a skill whose name an earlier declared source already installed (the curated directory holds that source's copy, which takes precedence), and a skill locked with an empty integrity by the migration from the legacy lockfile format, until `--update` or a ref change fetches it again and records its hash. It is safe to commit this file. An example:
 
 ```json
 {

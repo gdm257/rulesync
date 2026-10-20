@@ -125,14 +125,63 @@ export type CodewhalePermissionsOverride = z.infer<typeof CodewhalePermissionsOv
 export const COPILOT_DEFAULT_PERMISSION_MODES = ["default", "autoApprove", "autopilot"] as const;
 export type CopilotDefaultPermissionMode = (typeof COPILOT_DEFAULT_PERMISSION_MODES)[number];
 
+/** `chat.agent.sandbox.enabled`: `"off"` or `"on"`. */
+export const CopilotSandboxEnabledSchema = z.enum(["off", "on"]);
+
+/** `chat.agent.sandbox.fileSystem.userConfiguredPaths`. */
+export const CopilotSandboxUserConfiguredPathsSchema = z.strictObject({
+  readwritePaths: z.optional(z.array(z.string())),
+  readonlyPaths: z.optional(z.array(z.string())),
+  deniedPaths: z.optional(z.array(z.string())),
+});
+
+/**
+ * The Agent Host sandbox settings VS Code 1.141 settled on, as a nested object
+ * whose path mirrors the dotted setting key under `chat.agent.sandbox.` — e.g.
+ * `network.allowNetwork` writes `chat.agent.sandbox.network.allowNetwork`.
+ * Only the documented, registered keys are accepted; the deprecated 1.138
+ * shapes (`chat.agent.sandbox.allowNetwork`, `.fileSystem.linux|mac|windows`)
+ * are not modeled, since the Agent Host ignores them.
+ *
+ * @see https://code.visualstudio.com/docs/agents/run/agent-sandboxing
+ * @see https://code.visualstudio.com/docs/agents/reference/ai-settings
+ */
+const CopilotSandboxSchema = z.strictObject({
+  enabled: z.optional(CopilotSandboxEnabledSchema),
+  network: z.optional(
+    z.strictObject({
+      allowNetwork: z.optional(z.boolean()),
+      allowLocalNetwork: z.optional(z.boolean()),
+    }),
+  ),
+  allowUnsandboxedCommands: z.optional(z.boolean()),
+  mcpServers: z.optional(z.boolean()),
+  lspServers: z.optional(z.boolean()),
+  credentials: z.optional(
+    z.strictObject({
+      authenticategit: z.optional(z.boolean()),
+      authenticategh: z.optional(z.boolean()),
+    }),
+  ),
+  fileSystem: z.optional(
+    z.strictObject({
+      allowDevToolAccess: z.optional(z.boolean()),
+      userConfiguredPaths: z.optional(CopilotSandboxUserConfiguredPathsSchema),
+    }),
+  ),
+});
+export type CopilotSandbox = z.infer<typeof CopilotSandboxSchema>;
+
 /**
  * Tool-scoped override block for GitHub Copilot in VS Code.
  * `defaultPermissionMode` writes the workspace `chat.permissions.default`
- * setting, which has no canonical category.
+ * setting, and `sandbox` writes the `chat.agent.sandbox.*` settings; neither
+ * has a canonical category.
  */
 const CopilotPermissionsOverrideSchema = z.looseObject({
   permission: z.optional(ToolScopedPermissionSchema),
   defaultPermissionMode: z.optional(z.enum(COPILOT_DEFAULT_PERMISSION_MODES)),
+  sandbox: z.optional(CopilotSandboxSchema),
 });
 export type CopilotPermissionsOverride = z.infer<typeof CopilotPermissionsOverrideSchema>;
 
@@ -409,7 +458,8 @@ export type CursorPermissionsOverride = z.infer<typeof CursorPermissionsOverride
  * autonomy/sandbox controls with no canonical permission category — under
  * `tools` (`approvalMode` = plan/default/auto-edit/auto/yolo, `autoAccept`,
  * `sandbox`, `sandboxImage`, `disabled`, `visible`, `eager`, `listDirectory`,
- * `todoWrite`, `workflowsEnabled`, `workflowNameOnly`, `executionSandbox`) and
+ * `todoWrite`, `codeModeOnly`, `freeform`, `workflowsEnabled`, `workflowNameOnly`,
+ * `executionSandbox`) and
  * `security` (`folderTrust`, `allowedHttpHookUrls`, `allowPrivateNetworkHooks`,
  * `allowedInsecureVoiceBaseUrls`) and `skills` (the skill kill-switches
  * `disabled`, `defaultDisabled`, `enabled`, `disabledLevels`, each a list Qwen
@@ -428,7 +478,8 @@ export type CursorPermissionsOverride = z.infer<typeof CursorPermissionsOverride
  * changes what the file said is reported in either scope, naming what that key
  * decides there — the autonomy and containment
  * controls (`approvalMode`, `autoAccept`, `sandbox`, `sandboxImage`), the
- * registry controls (`disabled`, `visible`, `listDirectory`, `todoWrite`, and `eager`, which
+ * registry controls (`disabled`, `visible`, `listDirectory`, `todoWrite`,
+ * `codeModeOnly`, `freeform`, and `eager`, which
  * demotes an omitted tool to deferred rather than removing it, replacing rather
  * than merging with the list a higher scope set), the Auto Mode
  * classifier config, the skill kill-switches, and, because these groups are
@@ -549,8 +600,12 @@ export type TabninePermissionsOverride = z.infer<typeof TabninePermissionsOverri
  * are merged into the matching `reasonix.toml` table and emitted only for
  * Reasonix, while the shared `permission` block continues to drive
  * `[permissions].allow`/`ask`/`deny`. Kept `looseObject` (verbatim passthrough).
- * Note: the whole `[sandbox]` table round-trips, but only the plan-mode keys are
- * re-extracted from `[agent]` on import — other `agent` keys authored here reach
+ * The user-only `[sandbox]` keys (`allow_devices`, `egress_unlisted`,
+ * `host_authorities`) are written only by `--global` generate: Reasonix replaces
+ * a project value with the user's (`narrowSandbox` in `project_scope.go`).
+ * Note: the whole `[sandbox]` table round-trips (minus the user-only keys of a
+ * project file), but only the plan-mode keys are re-extracted from `[agent]` on
+ * import — other `agent` keys authored here reach
  * `reasonix.toml` on generate but are not re-extracted back into the override.
  *
  * @example
@@ -605,14 +660,68 @@ export type ReasonixPermissionsOverride = z.infer<typeof ReasonixPermissionsOver
  * output-style` rule option) or a `plugin-name:style-name` reference. The
  * shared `permission` block continues to drive `permissions.allow`/`ask`/`deny`.
  *
+ * The other documented settings with no canonical category are authored here
+ * too and merged into the same file, key by key, over what the file already
+ * holds: `general.defaultPermissionMode`, `tools.core` / `tools.exclude`, the
+ * MCP approval and loading keys under `mcp` (`allowed`, `excluded`,
+ * `enableAllProjectMcpServers`, `enabledProjectMcpServers`, `lazyLoad`),
+ * `agents.overrides`, the top-level `agentsMdExcludes` and the top-level
+ * `autoMode` classifier guidance (`allow` / `soft_deny` / `environment`).
+ * Qoder reads `autoMode` from the user settings only, so it is written by
+ * `--global` generate alone. Only the keys listed here are written; any other
+ * key of these groups or of `autoMode` (`tools.shell.pager`,
+ * `general.preferredEditor`, ...) is skipped with a warning. Each authored key
+ * is laid over what the file holds; removing it from the override leaves the
+ * previously written value in place.
+ *
  * @see https://docs.qoder.com/cli/output-styles
  * @see https://docs.qoder.com/cli/settings-reference
+ * @see https://docs.qoder.com/en/cli/permissions
  * @example
  * { "outputStyle": "concise-review" }
+ * @example
+ * { "mcp": { "enabledProjectMcpServers": ["playwright"], "lazyLoad": true },
+ *   "tools": { "exclude": ["WebSearch"] },
+ *   "autoMode": { "environment": ["This is a pnpm monorepo"] } }
  */
 const QoderPermissionsOverrideSchema = z.looseObject({
   permission: z.optional(ToolScopedPermissionSchema),
   outputStyle: z.optional(z.string().check(z.trim(), z.minLength(1))),
+  general: z.optional(
+    z.looseObject({
+      // `default`, `accept_edits`, `plan`, `auto`, `bypass_permissions`,
+      // `dont_ask` (cspell:disable-line) or one of their aliases (case-insensitive), so left a string.
+      defaultPermissionMode: z.optional(z.string().check(z.trim(), z.minLength(1))),
+    }),
+  ),
+  tools: z.optional(
+    z.looseObject({
+      core: z.optional(z.array(z.string())),
+      exclude: z.optional(z.array(z.string())),
+    }),
+  ),
+  mcp: z.optional(
+    z.looseObject({
+      allowed: z.optional(z.array(z.string())),
+      excluded: z.optional(z.array(z.string())),
+      enableAllProjectMcpServers: z.optional(z.boolean()),
+      enabledProjectMcpServers: z.optional(z.array(z.string())),
+      lazyLoad: z.optional(z.boolean()),
+    }),
+  ),
+  agents: z.optional(
+    z.looseObject({
+      overrides: z.optional(z.record(z.string(), z.looseObject({}))),
+    }),
+  ),
+  autoMode: z.optional(
+    z.looseObject({
+      allow: z.optional(z.array(z.string())),
+      soft_deny: z.optional(z.array(z.string())),
+      environment: z.optional(z.array(z.string())),
+    }),
+  ),
+  agentsMdExcludes: z.optional(z.array(z.string())),
 });
 export type QoderPermissionsOverride = z.infer<typeof QoderPermissionsOverrideSchema>;
 
@@ -1448,14 +1557,40 @@ export type ZedPermissionsOverride = z.infer<typeof ZedPermissionsOverrideSchema
  *
  * @example
  * { "sandbox": { "allowed_domains": ["github.com"], "network_mode": "limited" } }
+ * The same override carries the repo-level plugin governance lists Devin reads
+ * from a checkout's `.devin/config.json`: `requiredPlugins` (plugin sources
+ * installed automatically), `optionalPlugins` (endorsed sources that carve an
+ * exception out of a forbidden entry; never installed) and `forbiddenPlugins`
+ * (plugin identities or `*` globs that may not load). A source is a string
+ * (`"owner/repo"` or a git URL) or an object such as
+ * `{ "source": "github", "repo": "owner/repo" }`. They are a repo governance
+ * level, so they are emitted at project scope only.
+ *
  * @example
  * { "sandbox": { "excluded": { "allow": ["Exec(git status *)"], "deny": ["Exec(git tag *)"] } } }
+ * @example
+ * { "forbiddenPlugins": ["*"], "optionalPlugins": ["acme/approved"] }
  * @see https://docs.devin.ai/cli/sandbox
  * @see https://docs.devin.ai/cli/reference/configuration/config-file
+ * @see https://docs.devin.ai/cli/extensibility/plugins/overview
  */
+const DevinPluginSourceListSchema = z.array(z.union([z.string(), z.looseObject({})]));
+/**
+ * Shapes of the Devin repo-level plugin governance lists, keyed by their
+ * `.devin/config.json` name. Shared by the override schema and the import,
+ * which drops a list that would not pass it.
+ */
+export const DEVIN_PLUGIN_GOVERNANCE_SCHEMAS = {
+  requiredPlugins: DevinPluginSourceListSchema,
+  optionalPlugins: DevinPluginSourceListSchema,
+  forbiddenPlugins: z.array(z.string()),
+} as const;
 const DevinPermissionsOverrideSchema = z.looseObject({
   permission: z.optional(ToolScopedPermissionSchema),
   sandbox: z.optional(z.looseObject({})),
+  requiredPlugins: z.optional(DEVIN_PLUGIN_GOVERNANCE_SCHEMAS.requiredPlugins),
+  optionalPlugins: z.optional(DEVIN_PLUGIN_GOVERNANCE_SCHEMAS.optionalPlugins),
+  forbiddenPlugins: z.optional(DEVIN_PLUGIN_GOVERNANCE_SCHEMAS.forbiddenPlugins),
 });
 export type DevinPermissionsOverride = z.infer<typeof DevinPermissionsOverrideSchema>;
 
@@ -1534,6 +1669,7 @@ export const PermissionsConfigSchema = z.looseObject({
   "kimi-code": z.optional(KimiCodePermissionsOverrideSchema),
   roo: z.optional(CanonicalPermissionsOverrideSchema),
   rovodev: z.optional(CanonicalPermissionsOverrideSchema),
+  trae: z.optional(CanonicalPermissionsOverrideSchema),
   zoocode: z.optional(CanonicalPermissionsOverrideSchema),
 });
 export type PermissionsConfig = z.infer<typeof PermissionsConfigSchema>;

@@ -87,8 +87,29 @@ export type ToolHooksConverterConfig = {
     readonly falseValue?: string;
     /** Emit only on `command` hooks, for a field the tool documents there only. */
     readonly commandOnly?: boolean;
+    /**
+     * Hook types the tool documents the field on, for a field wider than
+     * `command` alone (Claude Code's `onFailure` on `command` and `http`);
+     * unrestricted when absent.
+     */
+    readonly hookTypes?: ReadonlySet<HookType>;
     /** Canonical events the tool honours the field on; unrestricted when absent. */
     readonly events?: ReadonlySet<string>;
+    /**
+     * Canonical events the tool ignores the field on, for a field honoured
+     * almost everywhere (the complement of `events`).
+     */
+    readonly ignoredEvents?: ReadonlySet<string>;
+    /**
+     * Boolean command-hook flags that make the tool ignore the field when set
+     * to `true` (Claude Code's `onFailure` on background `async` /
+     * `asyncRewake` command hooks). Checked on `command` hooks only: the flags
+     * are command-only, so they are never emitted on another hook type and
+     * cannot switch the field off there. Each name is read from the canonical
+     * definition on export and from the tool hook on import, so it is meant
+     * for flags the tool spells the same as the canonical field.
+     */
+    readonly ignoredWhenFlags?: ReadonlyArray<"async" | "asyncRewake">;
   }>;
   /**
    * Per-hook number fields to carry through the round-trip, each mapping a
@@ -123,6 +144,16 @@ export type ToolHooksConverterConfig = {
    * whose entries are all strings are emitted and imported, so a malformed
    * value cannot leak into a config the tool would reject.
    */
+  /**
+   * Canonical fields that *restrict* when a hook runs and that the tool
+   * refuses to honour: it skips a handler carrying one rather than run it
+   * unconditionally. On export, a definition carrying a non-empty value for
+   * one of them is skipped with a warning, so the generated config holds
+   * neither a handler the tool will not load nor a widened one that fires on
+   * every call its matcher selects. Import is unaffected: list the field in
+   * {@link stringPassthroughFields} too to keep it on an imported hook.
+   */
+  skippedWhenFields?: ReadonlyArray<"if">;
   arrayPassthroughFields?: ReadonlyArray<{
     readonly canonical: "args";
     readonly tool: string;
@@ -837,16 +868,19 @@ function isKeywordFieldApplicable({
   spec,
   hookType,
   eventName,
+  flags,
   direction,
   warn,
 }: {
   spec: KeywordPassthroughFieldSpec;
   hookType: HookType;
   eventName: string;
+  /** The hook the field sits on, read for {@link KeywordPassthroughFieldSpec.ignoredWhenFlags}. */
+  flags: Readonly<Record<string, unknown>>;
   direction: "generated" | "imported";
   warn?: (message: string) => void;
 }): boolean {
-  const { canonical, tool, commandOnly, events } = spec;
+  const { canonical, tool, commandOnly, hookTypes, events, ignoredEvents, ignoredWhenFlags } = spec;
   const field = direction === "generated" ? canonical : tool;
   if (!isFieldApplicable({ commandOnly, hookType })) {
     warn?.(
@@ -855,10 +889,33 @@ function isKeywordFieldApplicable({
     );
     return false;
   }
+  if (hookTypes !== undefined && !hookTypes.has(hookType)) {
+    warn?.(
+      `Dropping "${field}" from a "${hookType}" hook on "${eventName}": this tool documents ` +
+        `"${tool}" on ${[...hookTypes].map((type) => `"${type}"`).join(", ")} hooks only, so it is not ${direction}.`,
+    );
+    return false;
+  }
   if (events !== undefined && !events.has(eventName)) {
     warn?.(
       `Dropping "${field}" from a "${hookType}" hook on "${eventName}": this tool honours ` +
         `"${tool}" on ${[...events].map((event) => `"${event}"`).join(", ")} only, so it is not ${direction}.`,
+    );
+    return false;
+  }
+  if (ignoredEvents?.has(eventName)) {
+    warn?.(
+      `Dropping "${field}" from a "${hookType}" hook on "${eventName}": this tool ignores ` +
+        `"${tool}" on "${eventName}", so it is not ${direction}.`,
+    );
+    return false;
+  }
+  const setFlag =
+    hookType === "command" ? ignoredWhenFlags?.find((flag) => flags[flag] === true) : undefined;
+  if (setFlag !== undefined) {
+    warn?.(
+      `Dropping "${field}" from a "${hookType}" hook on "${eventName}": this tool ignores ` +
+        `"${tool}" on a hook that sets "${setFlag}", so it is not ${direction}.`,
     );
     return false;
   }
@@ -890,7 +947,16 @@ function emitKeywordFields({
     if (value !== true) {
       continue;
     }
-    if (isKeywordFieldApplicable({ spec, hookType, eventName, direction: "generated", warn })) {
+    if (
+      isKeywordFieldApplicable({
+        spec,
+        hookType,
+        eventName,
+        flags: def,
+        direction: "generated",
+        warn,
+      })
+    ) {
       emitted[spec.tool] = spec.trueValue;
     }
   }
@@ -922,7 +988,16 @@ function importKeywordFields({
     if (value === undefined) {
       continue;
     }
-    if (!isKeywordFieldApplicable({ spec, hookType, eventName, direction: "imported", warn })) {
+    if (
+      !isKeywordFieldApplicable({
+        spec,
+        hookType,
+        eventName,
+        flags: h,
+        direction: "imported",
+        warn,
+      })
+    ) {
       continue;
     }
     if (value === spec.trueValue) {
@@ -1014,6 +1089,62 @@ function emitAllPassthroughFields({
   };
 }
 
+/**
+ * Why a definition must not be emitted for this tool, or `undefined` when it
+ * can be: it carries a restricting field the tool refuses to honour (see
+ * `skippedWhenFields`).
+ */
+function describeExportSkipReason({
+  def,
+  hookType,
+  eventName,
+  converterConfig,
+}: {
+  def: HooksConfig["hooks"][string][number];
+  hookType: HookType;
+  eventName: string;
+  converterConfig: ToolHooksConverterConfig;
+}): string | undefined {
+  const field = converterConfig.skippedWhenFields?.find((name) => isNonEmptyString(def[name]));
+  if (field === undefined) {
+    return undefined;
+  }
+  return (
+    `Skipping a "${eventName}" ${hookType} hook (${quoteValueForWarning(def.command ?? def.url)}): ` +
+    `this tool does not support its "${field}" condition (${quoteValueForWarning(def[field])}), ` +
+    `and without it the hook would run on every call its matcher selects.`
+  );
+}
+
+/**
+ * Whether a definition can be emitted for this tool: its hook type is one the
+ * tool supports, and it carries no restricting field the tool refuses to
+ * honour (warned about here).
+ */
+function isEmittableDefinition({
+  def,
+  hookType,
+  eventName,
+  converterConfig,
+  warn,
+}: {
+  def: HooksConfig["hooks"][string][number];
+  hookType: HookType;
+  eventName: string;
+  converterConfig: ToolHooksConverterConfig;
+  warn?: (message: string) => void;
+}): boolean {
+  if (!isSupportedHookType({ type: hookType, converterConfig })) {
+    return false;
+  }
+  const skipReason = describeExportSkipReason({ def, hookType, eventName, converterConfig });
+  if (skipReason !== undefined) {
+    warn?.(skipReason);
+    return false;
+  }
+  return true;
+}
+
 function buildToolHooks({
   defs,
   eventName,
@@ -1028,7 +1159,7 @@ function buildToolHooks({
   const hooks: Array<Record<string, unknown>> = [];
   for (const def of defs) {
     const hookType = def.type ?? "command";
-    if (!isSupportedHookType({ type: hookType, converterConfig })) {
+    if (!isEmittableDefinition({ def, hookType, eventName, converterConfig, warn })) {
       continue;
     }
     const command = applyCommandPrefix({ def, converterConfig });
@@ -1750,7 +1881,11 @@ export function toolHooksToCanonical({
       defs.push(...toolMatcherEntryToCanonical({ rawEntry, eventName, converterConfig, warn }));
     }
     if (defs.length > 0) {
-      canonical[eventName] = defs;
+      // Append rather than assign: a tool can expose two native names for one
+      // canonical event (Devin's `PostCompaction` and `PostCompact`), and both
+      // keys' hooks must survive the import.
+      const existing = Object.hasOwn(canonical, eventName) ? canonical[eventName] : undefined;
+      canonical[eventName] = existing ? [...existing, ...defs] : defs;
     }
   }
   return canonical;

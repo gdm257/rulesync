@@ -62,7 +62,7 @@ const RulesyncSkillFrontmatterSchemaInternal = z.looseObject({
   targets: z._default(RulesyncTargetsSchema, ["*"]),
   // Default for tools that support the flag (claudecode, codebuddy, copilot, copilotcli, crush,
   // cursor, zed, pi, omp, qwencode, vibe, grokcli, factorydroid, dsh, reasonix, commandcode,
-  // lettacode).
+  // lettacode, opencode, mimocode).
   // A target-section value of the same key overrides this default.
   // `devin` also consumes this root value (mapping `true` onto a user-only
   // `triggers` list); it has no section key of the same name, but a
@@ -160,16 +160,19 @@ const RulesyncSkillFrontmatterSchemaInternal = z.looseObject({
       license: z.optional(z.unknown()),
       compatibility: z.optional(z.unknown()),
       metadata: z.optional(z.unknown()),
+      "disable-model-invocation": z.optional(z.boolean()),
     }),
   ),
   // Mirrors `opencode` so a skill round-trips through the shared OpenCode
-  // adapter; MiMo Code itself ignores these extra SKILL.md fields.
+  // adapter; MiMo Code itself ignores these extra SKILL.md fields, except
+  // `disable-model-invocation`, which its skill loader reads.
   mimocode: z.optional(
     z.looseObject({
       "allowed-tools": z.optional(z.array(z.string())),
       license: z.optional(z.unknown()),
       compatibility: z.optional(z.unknown()),
       metadata: z.optional(z.unknown()),
+      "disable-model-invocation": z.optional(z.boolean()),
     }),
   ),
   kilo: z.optional(
@@ -464,6 +467,16 @@ const RulesyncSkillFrontmatterSchemaInternal = z.looseObject({
       metadata: z.optional(z.looseObject({})),
     }),
   ),
+  // Meta Muse Code reads the Agent Skills packaging fields: `skills inspect`
+  // reports `license` (1.4.0) and `metadata.display-name` renames the skill in
+  // the UI (1.4.7). https://dev.meta.ai/docs/muse-code/changelog
+  musecode: z.optional(
+    z.looseObject({
+      license: z.optional(z.string()),
+      compatibility: z.optional(z.union([z.string(), z.looseObject({})])),
+      metadata: z.optional(z.looseObject({})),
+    }),
+  ),
   // ZCode's "Skill SKILL.md Field Reference" allowlists exactly five keys:
   // required `name`/`description` plus optional `when_to_use`, `license` and
   // `metadata`. There is no `compatibility` field, so it is not offered here.
@@ -567,12 +580,14 @@ export type RulesyncSkillFrontmatterInput = {
     license?: unknown;
     compatibility?: unknown;
     metadata?: unknown;
+    "disable-model-invocation"?: boolean;
   };
   mimocode?: {
     "allowed-tools"?: string[];
     license?: unknown;
     compatibility?: unknown;
     metadata?: unknown;
+    "disable-model-invocation"?: boolean;
   };
   kilo?: {
     "allowed-tools"?: string[];
@@ -722,6 +737,11 @@ export type RulesyncSkillFrontmatterInput = {
   crush?: {
     "disable-model-invocation"?: boolean;
     "user-invocable"?: boolean;
+    license?: string;
+    compatibility?: string | Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  };
+  musecode?: {
     license?: string;
     compatibility?: string | Record<string, unknown>;
     metadata?: Record<string, unknown>;

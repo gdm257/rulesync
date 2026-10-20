@@ -48,9 +48,9 @@ runs:
       if: steps.trust-root.outcome == 'success'
       shell: bash
       env:
-        CICD_SENSOR_VERSION: v0.0.45
-        CICD_SENSOR_TARBALL_SHA256: 783467e39039b4d64300ef76c146699443d3f1abf685e47220f533b37ad478d9
-        CICD_SENSOR_AGENT_SHA256: 888bc236e88bf3b9b8bbd78442f41fb876e5c5cc86f2b598a88708e797eb2a1a
+        CICD_SENSOR_VERSION: v0.0.48
+        CICD_SENSOR_TARBALL_SHA256: 16d82b5ff5eea6f0db1fc90d0708627b53cfdcc26820eb2dbfaf33fb231eac06
+        CICD_SENSOR_AGENT_SHA256: c627b189d87b51e14cbe5ecff0753edcbd71a4241e34517b1c6f7eed08bf6e71
         CERTIFICATE_IDENTITY: https://github.com/cicd-sensor/cicd-sensor/.github/workflows/releases-sensor.yaml@refs/heads/main
         CERTIFICATE_OIDC_ISSUER: https://token.actions.githubusercontent.com
       run: |
@@ -100,7 +100,7 @@ runs:
       id: start
       if: steps.verify.outputs.outcome == 'verified'
       continue-on-error: true
-      uses: cicd-sensor/cicd-sensor-action@cb0546d5707fcb68bf755006cb97817b3750996b # v0.0.39
+      uses: cicd-sensor/cicd-sensor-action@49560b716a9abba9190a48c0b6bca18ba98918e8 # v0.0.40
       with:
         cicd-sensor-version: ${{ steps.verify.outputs.version }}
         manager-url: https://manager.cicdsensor.cloud.shisho.dev

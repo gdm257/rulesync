@@ -39,6 +39,7 @@ import { HermesagentPermissions } from "./hermesagent-permissions.js";
 import { JuniePermissions } from "./junie-permissions.js";
 import { KiloPermissions } from "./kilo-permissions.js";
 import { KimiCodePermissions } from "./kimi-code-permissions.js";
+import { KiroScopedPermissions } from "./kiro-capability-permissions.js";
 import { KiroPermissions } from "./kiro-permissions.js";
 import { LettacodePermissions } from "./lettacode-permissions.js";
 import { MimocodePermissions } from "./mimocode-permissions.js";
@@ -61,6 +62,7 @@ import type {
   ToolPermissionsSettablePaths,
 } from "./tool-permissions.js";
 import { ToolPermissions } from "./tool-permissions.js";
+import { TraePermissions } from "./trae-permissions.js";
 import { VibePermissions } from "./vibe-permissions.js";
 import { WarpPermissions } from "./warp-permissions.js";
 import { WarpcliPermissions } from "./warpcli-permissions.js";
@@ -442,13 +444,15 @@ export const toolPermissionsFactories = new Map<
     },
   ],
   [
-    // Kiro IDE and CLI share the same permissions file.
+    // Kiro IDE and CLI share the same permissions files: the agent config
+    // `.kiro/agents/default.json` in project scope, and the capability-based
+    // `~/.kiro/settings/permissions.yaml` (IDE 1.0 / CLI V3) in global scope.
     "kiro-cli",
     {
-      class: KiroPermissions,
+      class: KiroScopedPermissions,
       meta: {
         supportsProject: true,
-        supportsGlobal: false,
+        supportsGlobal: true,
         supportsImport: true,
       },
     },
@@ -456,10 +460,10 @@ export const toolPermissionsFactories = new Map<
   [
     "kiro-ide",
     {
-      class: KiroPermissions,
+      class: KiroScopedPermissions,
       meta: {
         supportsProject: true,
-        supportsGlobal: false,
+        supportsGlobal: true,
         supportsImport: true,
       },
     },
@@ -701,6 +705,19 @@ export const toolPermissionsFactories = new Map<
     },
   ],
   [
+    "trae",
+    {
+      class: TraePermissions,
+      meta: {
+        // TRAE keeps its permission policy in the user file
+        // `~/.trae/permission/global.json`; there is no project-scoped one.
+        supportsProject: false,
+        supportsGlobal: true,
+        supportsImport: true,
+      },
+    },
+  ],
+  [
     "zoocode",
     {
       class: ZoocodePermissions,
@@ -875,7 +892,7 @@ export class PermissionsProcessor extends FeatureProcessor {
 
   async convertToolFilesToRulesyncFiles(toolFiles: ToolFile[]): Promise<RulesyncFile[]> {
     const permissions = toolFiles.filter((f): f is ToolPermissions => f instanceof ToolPermissions);
-    return permissions.map((p) => p.toRulesyncPermissions());
+    return permissions.map((p) => p.toRulesyncPermissions({ logger: this.logger }));
   }
 
   static getToolTargets({

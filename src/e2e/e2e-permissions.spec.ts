@@ -110,6 +110,9 @@ const permissionsGlobalTargets = [
   "junie",
   "lettacode",
   "qoder",
+  "trae",
+  "kiro-cli",
+  "kiro-ide",
 ] as const;
 
 describe("E2E: permissions", () => {
@@ -2525,6 +2528,67 @@ describe("E2E: permissions (global mode)", () => {
     expect(await fileExists(join(homeDir, ".bob", "settings", "settings.json"))).toBe(false);
   });
 
+  it.each([{ target: "kiro-cli" }, { target: "kiro-ide" }])(
+    "should generate and import $target permissions in ~/.kiro/settings/permissions.yaml with --global",
+    async ({ target }) => {
+      const projectDir = getProjectDir();
+      const homeDir = getHomeDir();
+      const permissionsPath = join(homeDir, ".kiro", "settings", "permissions.yaml");
+
+      // A rule Kiro (or the user) wrote for a capability rulesync does not map
+      // must survive generation.
+      await writeFileContent(
+        permissionsPath,
+        'rules:\n  - capability: mcp\n    match: ["github/*"]\n    effect: allow\n',
+      );
+      await writeFileContent(
+        join(projectDir, RULESYNC_PERMISSIONS_RELATIVE_FILE_PATH),
+        JSON.stringify(
+          {
+            permission: {
+              bash: { "git status *": "allow", "git push *": "ask", "rm *": "deny" },
+              read: { "*": "allow" },
+            },
+          },
+          null,
+          2,
+        ),
+      );
+
+      await runGenerate({
+        target,
+        features: "permissions",
+        global: true,
+        env: { HOME_DIR: homeDir },
+      });
+
+      expect(load(await readFileContent(permissionsPath))).toEqual({
+        rules: [
+          { capability: "mcp", match: ["github/*"], effect: "allow" },
+          { capability: "shell", match: ["git status *"], effect: "allow" },
+          { capability: "shell", match: ["git push *"], effect: "ask" },
+          { capability: "shell", match: ["rm *"], effect: "deny" },
+          { capability: "fs_read", effect: "allow" },
+        ],
+      });
+
+      await runImport({
+        target,
+        features: "permissions",
+        global: true,
+        env: { HOME_DIR: homeDir },
+      });
+
+      const imported = JSON.parse(
+        await readFileContent(join(homeDir, RULESYNC_PERMISSIONS_RELATIVE_FILE_PATH)),
+      );
+      expect(imported.permission).toEqual({
+        bash: { "git status *": "allow", "git push *": "ask", "rm *": "deny" },
+        read: { "*": "allow" },
+      });
+    },
+  );
+
   it("should generate and import codewhale permissions in ~/.codewhale/permissions.toml (global-only)", async () => {
     const projectDir = getProjectDir();
     const homeDir = getHomeDir();
@@ -2775,6 +2839,51 @@ describe("E2E: permissions (global mode)", () => {
     expect(generated.permissions).toEqual({
       allow: ["Bash(git *)"],
       deny: ["Bash(rm -rf *)"],
+    });
+  });
+
+  it("should generate trae permissions into ~/.trae/permission/global.json (global-only)", async () => {
+    const projectDir = getProjectDir();
+    const homeDir = getHomeDir();
+
+    await writeFileContent(
+      join(projectDir, RULESYNC_PERMISSIONS_RELATIVE_FILE_PATH),
+      JSON.stringify(
+        {
+          permission: {
+            bash: { "git *": "allow", "rm -rf *": "deny" },
+            "mcp__github__*": { "*": "ask" },
+            webfetch: { "github.com": "allow" },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    await runGenerate({
+      target: "trae",
+      features: "permissions",
+      global: true,
+      env: { HOME_DIR: homeDir },
+    });
+
+    const generated = JSON.parse(
+      await readFileContent(join(homeDir, ".trae", "permission", "global.json")),
+    );
+    expect(generated).toEqual({
+      customProfiles: {
+        defaultCustomProfile: {
+          approval: {
+            commandRules: {
+              "git *": { approval: "allow" },
+              "rm -rf *": { approval: "deny" },
+            },
+            mcpRules: { "github__*": { approval: "ask" } },
+          },
+        },
+      },
+      resourceAuthorization: { network: { allow: ["github.com"] } },
     });
   });
 
@@ -4330,7 +4439,7 @@ describe("E2E: permissions (global mode)", () => {
     );
     const permissions = toTable(parsed.permissions);
     expect(permissions.allow).toContain("Bash(git status *)");
-    expect(permissions.deny).toContain("Read(.env)");
+    expect(permissions.deny).toContain("read_file(.env)");
     expect(toTableArray(parsed.plugins)).toMatchObject([{ name: "existing", command: "node" }]);
   });
 });
